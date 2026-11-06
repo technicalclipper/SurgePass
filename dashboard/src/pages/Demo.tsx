@@ -5,6 +5,7 @@ import { useLive, useTick, type Backend, type Stats } from "../lib/live";
 import { LineChart } from "../ui/charts";
 import { inr, LogStream } from "../ui/console";
 import { FloodControl } from "../ui/flood";
+import { LogPanel } from "../ui/logpanel";
 
 // Projector view: same flood, two identical sites. Left is hit directly, right is behind SurgePass.
 
@@ -20,6 +21,8 @@ export function Demo() {
   const t = last?.totals ?? {};
   // Real people and their agents: World ID verified, entered, won, booked with a pass. Pinned so a bot flood can't scroll them away.
   const people = live.people;
+  // Full-screen "With SurgePass": people and bot decisions together, in time order.
+  const gateAll = [...new Map([...live.people, ...live.events.filter((e) => e.side !== "direct" && (e.trace || e.kind === "human" || e.kind === "agent" || e.kind === "pass"))].map((e) => [e._id ?? `${e.ts}${e.note}`, e])).values()].sort((a, b) => a.ts - b.ts);
   // Hedera activity: from both buffers, so a flood can't hide it.
   const hedera = [...new Map([...live.people, ...live.events].filter((e) => e.hcsSeq || e.txId || e.kind === "draw").map((e) => [e._id ?? `${e.ts}${e.note}`, e])).values()].sort((a, b) => a.ts - b.ts);
   const price = Math.max(0, ...Object.values(last?.prices ?? {}));
@@ -70,30 +73,22 @@ export function Demo() {
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-[1fr_1.25fr_0.75fr] gap-4">
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-error-700">Without SurgePass · what bots get from QuickBook B</div>
-          <div className="min-h-0 overflow-hidden">
-            <LogStream events={live.events.filter((e) => e.side === "direct")} max={10} dense />
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
+        <LogPanel title="Without SurgePass · what bots get from QuickBook B" tone="error" events={live.events.filter((e) => e.side === "direct")} />
+        <LogPanel
+          title="With SurgePass · what the gate does"
+          tone="success"
+          traces
+          events={live.events.filter((e) => e.side !== "direct" && e.trace && e.kind !== "human" && e.kind !== "agent")}
+          modalEvents={gateAll}
+        >
           {people.length > 0 && (
             <div className="mb-3 rounded-xl bg-success-100/50 p-2">
               <div className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-success-700">People & agents · World ID, entries, passes (pinned)</div>
               <LogStream events={people} max={2} dense traces />
             </div>
           )}
-          <div className="min-h-0 overflow-hidden">
-            <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace && e.kind !== "human" && e.kind !== "agent")} max={people.length ? 4 : 6} dense traces />
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">Hedera</div>
-          <div className="min-h-0 overflow-hidden">
-            <LogStream events={hedera} max={8} dense />
-          </div>
-        </div>
+        </LogPanel>
+        <LogPanel title="Hedera" events={hedera} />
       </div>
 
       <AnimatePresence>

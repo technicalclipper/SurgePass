@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { admin, GATEWAY, hashscanTopic, hashscanTx, type Drop } from "../lib/api";
 import { useLive } from "../lib/live";
 import { LineChart, Legend, StackedArea } from "../ui/charts";
-import { Field, inputCls, inr, LogStream, Panel, Pill } from "../ui/console";
+import { Field, inputCls, inr, Panel, Pill } from "../ui/console";
+import { LogPanel, mergedEvents } from "../ui/logpanel";
 import { latency, trafficSeries } from "./Overview";
 
 export function Traffic() {
@@ -37,11 +38,7 @@ export function Traffic() {
           <LineChart series={[{ name: "Gateway CPU", color: "var(--series-1)", values: live.stats.map((s) => s.gateway.cpu) }]} times={times} max={100} />
         </Panel>
       </div>
-      <Panel title="Decision log">
-        <div className="max-h-[480px] overflow-y-auto">
-          <LogStream events={live.events} max={200} />
-        </div>
-      </Panel>
+      <LogPanel title="Decision log" events={mergedEvents(live.people, live.events)} traces inlineMax={200} className="h-[560px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
     </div>
   );
 }
@@ -122,7 +119,7 @@ export function Proofs() {
   useEffect(() => {
     void admin<{ drops: Drop[] }>("/drops").then((r) => setDrops(r.drops));
   }, []);
-  const hcs = live.events.filter((e) => e.hcsSeq || e.txId);
+  const hcs = mergedEvents(live.people, live.events).filter((e) => e.hcsSeq || e.txId);
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -165,12 +162,7 @@ export function Proofs() {
           </tbody>
         </table>
       </Panel>
-      <Panel title="Hedera activity">
-        <div className="max-h-[480px] overflow-y-auto">
-          <LogStream events={hcs} max={200} />
-        </div>
-        {hcs.some((e) => hashscanTx(e.txId)) ? null : <div className="pt-2 text-xs text-gray-400">Transaction links appear when the gateway runs on Hedera testnet.</div>}
-      </Panel>
+      <LogPanel title="Hedera activity" events={hcs} inlineMax={200} className="h-[560px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useLive, type Stats } from "../lib/live";
 import { LineChart, Legend, StackedArea, Spark, type Series } from "../ui/charts";
 import { inr, Kpi, LogStream, Panel, Pill } from "../ui/console";
 import { FloodControl } from "../ui/flood";
+import { LogPanel, mergedEvents } from "../ui/logpanel";
 
 export const SERIES = {
   forwarded: { name: "Forwarded", color: "var(--series-1)" },
@@ -81,11 +82,7 @@ export function Overview() {
             {drops.length === 0 && <div className="py-6 text-center text-sm text-gray-400">No drops</div>}
           </div>
         </Panel>
-        <Panel title="Live decisions">
-          <div className="max-h-72 overflow-y-auto">
-            <LogStream events={live.events} max={40} dense traces />
-          </div>
-        </Panel>
+        <LogPanel title="Live decisions" events={mergedEvents(live.people, live.events)} traces inlineMax={40} className="h-[420px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
       </div>
 
       <Panel title="Backend p95 latency (ms)" right={<Legend series={latency(live.stats)} format={(v) => `${Math.round(v)} ms`} />}>
