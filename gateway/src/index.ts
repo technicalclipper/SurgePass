@@ -21,13 +21,16 @@ import { addStatusExtra } from "./status.ts";
 import { setPremiumCloseHandler } from "./lottery.ts";
 import { onBooked } from "./passes.ts";
 import { fcfs } from "./fcfs.ts";
+import { partnerApi, registerPartnerAdmin, startPartnerQueue } from "./partners.ts";
 
 const app = new Hono();
 
+registerPartnerAdmin(admin);
 app.route("/_sp/admin", admin);
 app.route("/_sp/api", agents);
 app.route("/_sp/api", premium);
 app.route("/_sp/api", fcfs);
+app.route("/_sp/api/partner", partnerApi);
 app.route("/_sp/api", api);
 app.route("/", discovery);
 setApprovalChallenge(approvalChallenge);
@@ -49,6 +52,7 @@ await watchDrops();
 startModeController();
 startLifecycle();
 startPassExpiry();
+startPartnerQueue();
 setWinnersHandler(async (drop, winners) => {
   for (const w of winners) await issuePass(drop, w);
 });

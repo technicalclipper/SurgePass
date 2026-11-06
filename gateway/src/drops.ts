@@ -77,12 +77,16 @@ export function normalizeDrop(input: Partial<Drop> & { label: string; pattern: s
     priceInr: input.priceInr,
     opensAt,
     closesAt,
-    passTtlSec: input.passTtlSec ?? 600,
+    passTtlSec: pool === "partner" ? (input.partner?.bookWithinSec ?? input.passTtlSec ?? 600) : (input.passTtlSec ?? 600),
     peak: input.peak ?? { mode: "auto", schedule: [{ start: opensAt - 5 * 60_000, end: closesAt + 30 * 60_000 }] },
     readPricing: input.readPricing ?? { freePerWindow: 1, windowSec: 10, minInr: 0.1, maxInr: 5 },
     premium:
       pool === "premium"
         ? { floorInr: 1000, ceilingInr: 2000, depositInr: 200, revealSec: 15, ...input.premium }
+        : undefined,
+    partner:
+      pool === "partner"
+        ? { capPerPartner: 4, depositInr: 20, bookWithinSec: 600, openDelaySec: 0, ...input.partner }
         : undefined,
     hcsTopicId: input.hcsTopicId,
     status: input.status ?? (opensAt > now ? "scheduled" : "open"),

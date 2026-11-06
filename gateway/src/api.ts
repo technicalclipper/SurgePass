@@ -47,7 +47,7 @@ export function publicDrop(d: Drop) {
   };
 }
 
-api.get("/drops", (c) => c.json({ drops: drops.all().map(publicDrop) }));
+api.get("/drops", (c) => c.json({ drops: drops.all().filter((d) => d.pool !== "partner").map(publicDrop) }));
 
 api.get("/drops/:id", async (c) => {
   const d = drops.get(c.req.param("id"));

@@ -5,7 +5,8 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
 export interface Assertion extends JWTPayload {
   drop: string;
-  pool: "normal" | "premium";
+  pool: "normal" | "premium" | "partner";
+  partner?: string;
   seats: number;
   requested: number;
   price: number | null;

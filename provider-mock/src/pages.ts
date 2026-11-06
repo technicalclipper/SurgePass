@@ -56,7 +56,7 @@ export function bookingPage(o: {
   seatsLeft: number;
 }) {
   const note = o.assertion
-    ? `<div class="note">Admitted with a SurgePass pass · up to <b>${o.assertion.seats}</b> seat(s)${o.assertion.pool === "premium" ? ` · premium price <b>₹${o.assertion.price}</b> per seat` : ""}</div>`
+    ? `<div class="note">Admitted with a SurgePass pass${o.assertion.partner ? ` · authorised partner <b>${esc(o.assertion.partner)}</b>` : ""} · up to <b>${o.assertion.seats}</b> seat(s)${o.assertion.pool === "premium" ? ` · premium price <b>₹${o.assertion.price}</b> per seat` : ""}</div>`
     : "";
   return page(
     o.title,

@@ -46,7 +46,7 @@ export async function gate(c: Context): Promise<Response> {
   if (pass.ok) {
     count("forwarded");
     const r = await who(c, m.drop.id);
-    emit({ kind: r.kind === "agent" ? "agent" : "human", method: req.method, path: url.pathname, status: 200, drop: m.drop.id, note: `pass ✓ ${pass.rec.seats} seat(s) → provider` });
+    emit({ kind: r.kind === "agent" || pass.rec.partner ? "agent" : "human", method: req.method, path: url.pathname, status: 200, drop: m.drop.id, note: `${pass.rec.partner ? `partner ${pass.rec.partner} · ` : ""}pass ✓ ${pass.rec.seats} seat(s) → provider` });
     const res = await forward(req, { body, assertion: await assertionFor(pass.rec) });
     return m.kind === "final" ? onFinalStep(m.drop, pass.rec, res) : res;
   }

@@ -184,7 +184,7 @@ export function startLifecycle() {
     for (const d of drops.all()) {
       if (d.status === "scheduled" && now >= d.opensAt) void setStatus(d.id, "open").then(() => broadcastPublic({ type: "drop", drop: d.id, status: "open" }));
       else if (d.status === "open" && now >= d.closesAt) {
-        const run = d.pool === "premium" ? premiumClose(d) : closeAndDraw(d);
+        const run = d.pool === "premium" ? premiumClose(d) : d.pool === "partner" ? setStatus(d.id, "results") : closeAndDraw(d);
         run.catch(async (e) => {
           emit({ kind: "system", drop: d.id, note: `draw failed, retrying: ${String(e).slice(0, 120)}` });
           await setStatus(d.id, "open");

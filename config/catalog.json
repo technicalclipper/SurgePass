@@ -9,7 +9,7 @@
       "class": "CC",
       "departs": "06:40",
       "fareInr": 1000,
-      "seats": { "TQ": 60, "PT": 12, "GN": 200 }
+      "seats": { "TQ": 60, "PT": 12, "AG": 20, "GN": 200 }
     },
     {
       "trainNo": "12951",
@@ -20,7 +20,7 @@
       "class": "3A",
       "departs": "17:00",
       "fareInr": 2800,
-      "seats": { "TQ": 40, "PT": 10, "GN": 300 }
+      "seats": { "TQ": 40, "PT": 10, "AG": 10, "GN": 300 }
     }
   ],
   "movies": [

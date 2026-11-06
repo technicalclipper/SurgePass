@@ -31,7 +31,19 @@ const K = {
   lock: (d: string) => `lock:realloc:${d}`,
 };
 
-export async function issuePass(drop: Drop, a: Allocation, price: number | null = null): Promise<PassRecord> {
+type PartnerRelease = (drop: Drop, rec: PassRecord, count: number) => Promise<void>;
+let partnerRelease: PartnerRelease | null = null;
+export function setPartnerRelease(fn: PartnerRelease) {
+  partnerRelease = fn;
+}
+
+type PassGuard = (rec: PassRecord) => Promise<boolean>;
+let passGuard: PassGuard = async () => true;
+export function setPassGuard(fn: PassGuard) {
+  passGuard = fn;
+}
+
+export async function issuePass(drop: Drop, a: Allocation, price: number | null = null, partner?: string): Promise<PassRecord> {
   const jti = `p_${randomBytes(9).toString("base64url")}`;
   const now = Date.now();
   const rec: PassRecord = {
@@ -42,6 +54,7 @@ export async function issuePass(drop: Drop, a: Allocation, price: number | null 
     requested: a.requested,
     price,
     jti,
+    partner,
     issuedAt: now,
     expiresAt: now + drop.passTtlSec * 1000,
     status: "issued",
@@ -70,7 +83,7 @@ export async function passFor(dropId: string, anonId: string): Promise<PassRecor
 
 /** The signed token a winner (or their agent) presents to the gateway. */
 export async function passToken(rec: PassRecord) {
-  const claims: PassClaims = { drop: rec.drop, sub: rec.sub, pool: rec.pool, seats: rec.seats, requested: rec.requested, price: rec.price, jti: rec.jti };
+  const claims: PassClaims = { drop: rec.drop, sub: rec.sub, pool: rec.pool, seats: rec.seats, requested: rec.requested, price: rec.price, jti: rec.jti, partner: rec.partner };
   return sign("pass", claims, Math.max(60, Math.ceil((rec.expiresAt - Date.now()) / 1000)));
 }
 
@@ -105,7 +118,7 @@ function passCookieMap(c: Context): Record<string, string> {
   }
 }
 
-export type PassCheck = { ok: true; rec: PassRecord } | { ok: false; reason: "missing" | "invalid" | "wrong_drop" | "expired" | "used" };
+export type PassCheck = { ok: true; rec: PassRecord } | { ok: false; reason: "missing" | "invalid" | "wrong_drop" | "expired" | "used" | "blocked" };
 
 /** Signature ✔ right drop ✔ not expired ✔ not used. Header (agents) or cookie (browsers). */
 export async function checkPass(c: Context, drop: Drop): Promise<PassCheck> {
@@ -118,12 +131,13 @@ export async function checkPass(c: Context, drop: Drop): Promise<PassCheck> {
   if (!rec) return { ok: false, reason: "invalid" };
   if (rec.status === "used") return { ok: false, reason: "used" };
   if (rec.status === "expired" || Date.now() > rec.expiresAt) return { ok: false, reason: "expired" };
+  if (!(await passGuard(rec))) return { ok: false, reason: "blocked" };
   return { ok: true, rec };
 }
 
 /** X-SurgePass-Assertion for the gateway → provider hop. */
 export function assertionFor(rec: PassRecord) {
-  return sign("assertion", { drop: rec.drop, pool: rec.pool, seats: rec.seats, requested: rec.requested, price: rec.price, pass_id: rec.jti }, 300, config.audience);
+  return sign("assertion", { drop: rec.drop, pool: rec.pool, seats: rec.seats, requested: rec.requested, price: rec.price, pass_id: rec.jti, partner: rec.partner }, 300, config.audience);
 }
 
 /** Called after the final booking step returns. Marks the pass used and releases unbooked seats. */
@@ -150,6 +164,7 @@ export async function onFinalStep(drop: Drop, rec: PassRecord, res: Response): P
 /** Gives freed seats to the waitlist in order (min(requested, left)); any left over go to fair first come. */
 export async function releaseSeats(drop: Drop, rec: PassRecord, count: number) {
   if (count <= 0) return;
+  if (drop.pool === "partner" && partnerRelease) return partnerRelease(drop, rec, count);
   if (drop.hcsTopicId) void enqueue(drop.hcsTopicId, { t: "seats_released", drop: drop.id, jti_hash: sha256Hex(rec.jti).slice(0, 32), count }).catch(() => {});
   emit({ kind: "pass", drop: drop.id, note: `${count} seat(s) released` });
 

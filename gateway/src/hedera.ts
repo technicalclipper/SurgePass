@@ -39,6 +39,9 @@ if (hederaLive) {
   client.setOperator(operatorId, operatorKey);
 }
 
+/** The live SDK client and operator, or null in local mode. */
+export const live = () => (client && operatorId && operatorKey ? { client, operatorId, operatorKey } : null);
+
 export interface Submitted {
   seq: number;
   txId: string;

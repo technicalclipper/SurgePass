@@ -1,4 +1,4 @@
-export type Pool = "normal" | "premium";
+export type Pool = "normal" | "premium" | "partner";
 
 export type MatchLocation = "query" | "path" | "header" | "body";
 export type MatchOperator = "equals" | "in" | "exists";
@@ -38,6 +38,22 @@ export interface PremiumConfig {
   revealSec: number;
 }
 
+/** Partner lane: only allowlisted partner accounts can hold this drop's seat tokens. */
+export interface PartnerConfig {
+  /** Max seats one partner can hold or use in this drop. */
+  capPerPartner: number;
+  /** Refundable deposit per seat, in INR, paid via x402 when holding. */
+  depositInr: number;
+  /** Seconds a partner has to book on the provider after receiving seat tokens. */
+  bookWithinSec: number;
+  /** Seconds after opening before partners may hold (e.g. keep the first minutes for the public). */
+  openDelaySec: number;
+  /** Public drop that receives unused partner seats (its waitlist). */
+  spillTo?: string;
+  /** HTS token id of this drop's seat tokens. */
+  tokenId?: string;
+}
+
 export type DropStatus = "scheduled" | "open" | "revealing" | "drawing" | "results";
 
 export interface Drop {
@@ -72,6 +88,7 @@ export interface Drop {
   peak: PeakConfig;
   readPricing: ReadPricing;
   premium?: PremiumConfig;
+  partner?: PartnerConfig;
   hcsTopicId?: string;
   status: DropStatus;
   createdAt: number;
@@ -113,6 +130,8 @@ export interface DrawResult {
 
 export interface PassClaims {
   [key: string]: unknown;
+  /** Set for partner-lane passes: the partner's Hedera account. */
+  partner?: string;
   drop: string;
   sub: string;
   pool: Pool;
@@ -142,7 +161,13 @@ export type HcsMessage =
   | { t: "result"; drop: string; policy: string; seed: string; winners_hash: string; price?: number }
   | { t: "pass_issued"; drop: string; jti_hash: string; seats: number }
   | { t: "seats_released"; drop: string; jti_hash: string; count: number }
-  | { t: "agent_spend"; agent_account: string; amount_inr: number; tx_id: string };
+  | { t: "agent_spend"; agent_account: string; amount_inr: number; tx_id: string }
+  | { t: "partner_allowed"; drop: string; partner: string; token: string }
+  | { t: "partner_hold"; drop: string; partner: string; seats: number; hold: string }
+  | { t: "seats_allocated"; drop: string; partner: string; serials: number[]; hold: string }
+  | { t: "seats_redeemed"; drop: string; partner: string; serials: number[] }
+  | { t: "seats_reclaimed"; drop: string; partner: string; serials: number[]; to?: string }
+  | { t: "partner_frozen"; partner: string; frozen: boolean };
 
 /** Live events streamed to the dashboard and demo screen. */
 export interface LiveEvent {

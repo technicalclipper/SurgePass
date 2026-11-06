@@ -78,7 +78,7 @@ app.get(
       bookingPage({
         kind: "train",
         title: `${t.trainNo} · ${t.name}`,
-        subtitle: `${t.from} → ${t.to} · ${t.date} · ${t.class} · ${quota === "PT" ? "Premium Tatkal" : "Tatkal"}`,
+        subtitle: `${t.from} → ${t.to} · ${t.date} · ${t.class} · ${quota === "PT" ? "Premium Tatkal" : quota === "AG" ? "Partner quota" : "Tatkal"}`,
         fare,
         maxSeats: a ? a.seats : 6,
         assertion: a,
@@ -163,7 +163,7 @@ async function confirm(c: Context, key: string, item: string, fare: number, a: A
   inventory.set(key, left - passengers.length);
   const pnr = `QB${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 90 + 10)}`;
   const amount = fare * passengers.length;
-  bookings.push({ pnr, item, seats: passengers.length, amount, pool: a?.pool ?? "direct", at: Date.now() });
+  bookings.push({ pnr, item, seats: passengers.length, amount, pool: a?.partner ? `partner ${a.partner}` : (a?.pool ?? "direct"), at: Date.now() });
   return c.json({ ok: true, pnr, seats_booked: passengers.length, amount_inr: amount, fare_inr: fare, pool: a?.pool ?? null, redirect: `/booking/${pnr}` });
 }
 
