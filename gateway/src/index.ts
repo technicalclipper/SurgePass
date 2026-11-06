@@ -8,29 +8,15 @@ import { gate } from "./gate.ts";
 import { attachLive, setStatsSource } from "./live.ts";
 import { health, isPeak, startModeController } from "./mode.ts";
 import { serveRoom } from "./room.ts";
+import { api } from "./api.ts";
+import { jwks } from "./keys.ts";
+import { startLifecycle } from "./lottery.ts";
 
 const app = new Hono();
 
 app.route("/_sp/admin", admin);
-
-app.get("/_sp/api/drops", (c) =>
-  c.json({
-    drops: drops.all().map((d) => ({
-      id: d.id,
-      label: d.label,
-      subtitle: d.subtitle,
-      pool: d.pool,
-      status: d.status,
-      opensAt: d.opensAt,
-      closesAt: d.closesAt,
-      seats: d.seats,
-      maxSeatsPerEntry: d.maxSeatsPerEntry,
-      priceInr: d.priceInr,
-      premium: d.premium,
-      peakOn: isPeak(d),
-    })),
-  }),
-);
+app.route("/_sp/api", api);
+app.get("/.well-known/jwks.json", async (c) => c.json(await jwks()));
 
 app.all("/_sp/room", serveRoom);
 app.all("/_sp/room/*", serveRoom);
@@ -41,6 +27,7 @@ setStatsSource(() => ({ backends: health, drops: drops.all().map((d) => ({ id: d
 
 await watchDrops();
 startModeController();
+startLifecycle();
 
 const server = serve({ fetch: app.fetch, port: config.port }) as Server;
 attachLive(server);
