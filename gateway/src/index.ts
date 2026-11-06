@@ -20,12 +20,14 @@ import { bidStatus, premium, premiumClose, refundWinner } from "./premium.ts";
 import { addStatusExtra } from "./status.ts";
 import { setPremiumCloseHandler } from "./lottery.ts";
 import { onBooked } from "./passes.ts";
+import { fcfs } from "./fcfs.ts";
 
 const app = new Hono();
 
 app.route("/_sp/admin", admin);
 app.route("/_sp/api", agents);
 app.route("/_sp/api", premium);
+app.route("/_sp/api", fcfs);
 app.route("/_sp/api", api);
 app.route("/", discovery);
 setApprovalChallenge(approvalChallenge);
