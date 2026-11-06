@@ -16,14 +16,24 @@ import { currentPrices } from "./pricing.ts";
 import { agents, approvalChallenge } from "./agents.ts";
 import { setApprovalChallenge } from "./api.ts";
 import { discovery } from "./discovery.ts";
+import { bidStatus, premium, premiumClose, refundWinner } from "./premium.ts";
+import { addStatusExtra } from "./status.ts";
+import { setPremiumCloseHandler } from "./lottery.ts";
+import { onBooked } from "./passes.ts";
 
 const app = new Hono();
 
 app.route("/_sp/admin", admin);
 app.route("/_sp/api", agents);
+app.route("/_sp/api", premium);
 app.route("/_sp/api", api);
 app.route("/", discovery);
 setApprovalChallenge(approvalChallenge);
+setPremiumCloseHandler(premiumClose);
+addStatusExtra(bidStatus);
+onBooked(async (d, rec) => {
+  if (d.pool === "premium") await refundWinner(d, rec.sub);
+});
 app.get("/.well-known/jwks.json", async (c) => c.json(await jwks()));
 
 app.all("/_sp/room", serveRoom);

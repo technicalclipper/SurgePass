@@ -16,6 +16,12 @@ import { redis } from "./redis.ts";
 
 export const PASS_HEADER = "x-surgepass-pass";
 
+type BookedHook = (drop: Drop, rec: PassRecord, booked: number) => Promise<void>;
+const bookedHooks: BookedHook[] = [];
+export function onBooked(fn: BookedHook) {
+  bookedHooks.push(fn);
+}
+
 const K = {
   pass: (jti: string) => `pass:${jti}`,
   byOwner: (drop: string, anon: string) => `passby:${drop}:${anon}`,
@@ -136,6 +142,7 @@ export async function onFinalStep(drop: Drop, rec: PassRecord, res: Response): P
   emit({ kind: "pass", drop: drop.id, note: `booked ${booked} of ${rec.seats} seat(s)` });
   if (booked > rec.seats) emit({ kind: "system", drop: drop.id, note: `⚠ overbooked: ${booked} booked on a ${rec.seats}-seat pass` });
   if (booked < rec.seats) await releaseSeats(drop, rec, rec.seats - booked);
+  for (const fn of bookedHooks) await fn(drop, rec, booked).catch(() => {});
   broadcastPublic({ type: "booked", drop: drop.id, anonId: rec.sub, booked });
   return new Response(text, { status: res.status, statusText: res.statusText, headers: res.headers });
 }

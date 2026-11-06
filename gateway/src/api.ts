@@ -11,6 +11,7 @@ import { topicLink } from "./hedera.ts";
 import { addStatusExtra, personalStatus } from "./status.ts";
 import { bookingLink, claimIntoCookie, passFor, passToken, releasedCount } from "./passes.ts";
 import { config } from "./config.ts";
+import { premiumPublic } from "./premium.ts";
 import { envNum } from "@surgepass/shared/env";
 
 const CTX_PER_MIN = envNum("WORLD_CONTEXT_PER_MIN", 30);
@@ -112,7 +113,7 @@ api.get("/drops/:id/status", async (c) => {
 api.get("/drops/:id/verify", async (c) => {
   const d = drops.get(c.req.param("id"));
   if (!d) return c.json({ error: "not_found" }, 404);
-  return c.json(await verifyBundle(d));
+  return c.json({ ...(await verifyBundle(d)), premium: await premiumPublic(d) });
 });
 
 api.get("/drops/:id/entries", async (c) => {
