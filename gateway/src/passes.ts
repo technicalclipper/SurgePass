@@ -65,7 +65,11 @@ export async function issuePass(drop: Drop, a: Allocation, price: number | null 
     .set(K.byOwner(drop.id, a.anonId), jti, "EX", drop.passTtlSec + 86_400)
     .zadd(K.expiry, rec.expiresAt, jti)
     .exec();
-  if (drop.hcsTopicId) void enqueue(drop.hcsTopicId, { t: "pass_issued", drop: drop.id, jti_hash: sha256Hex(jti).slice(0, 32), seats: a.seats }).catch(() => {});
+  if (drop.hcsTopicId) {
+    void enqueue(drop.hcsTopicId, { t: "pass_issued", drop: drop.id, jti_hash: sha256Hex(jti).slice(0, 32), seats: a.seats })
+      .then((h) => emit({ kind: "pass", drop: drop.id, note: `pass issued · recorded on Hedera · ${a.seats} seat(s)${partner ? ` · partner ${partner}` : ""}`, hcsSeq: h.seq, txId: h.txId }))
+      .catch(() => {});
+  }
   emit({ kind: "pass", drop: drop.id, note: `pass issued · ${a.seats} seat(s)${a.seats < a.requested ? ` of ${a.requested}` : ""}` });
   broadcastPublic({ type: "pass", drop: drop.id, anonId: a.anonId, seats: a.seats, requested: a.requested, expiresAt: rec.expiresAt });
   return rec;
@@ -166,7 +170,11 @@ export async function onFinalStep(drop: Drop, rec: PassRecord, res: Response): P
 export async function releaseSeats(drop: Drop, rec: PassRecord, count: number) {
   if (count <= 0) return;
   if (drop.pool === "partner" && partnerRelease) return partnerRelease(drop, rec, count);
-  if (drop.hcsTopicId) void enqueue(drop.hcsTopicId, { t: "seats_released", drop: drop.id, jti_hash: sha256Hex(rec.jti).slice(0, 32), count }).catch(() => {});
+  if (drop.hcsTopicId) {
+    void enqueue(drop.hcsTopicId, { t: "seats_released", drop: drop.id, jti_hash: sha256Hex(rec.jti).slice(0, 32), count })
+      .then((h) => emit({ kind: "pass", drop: drop.id, note: `${count} seat(s) released · recorded on Hedera`, hcsSeq: h.seq, txId: h.txId }))
+      .catch(() => {});
+  }
   emit({ kind: "pass", drop: drop.id, note: `${count} seat(s) released` });
 
   while (!(await redis.set(K.lock(drop.id), "1", "PX", 5000, "NX"))) await new Promise((r) => setTimeout(r, 50));
