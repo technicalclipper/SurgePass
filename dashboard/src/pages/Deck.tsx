@@ -144,7 +144,7 @@ function Problem() {
     { n: "03", t: "Quotas leak to touts", d: "Agent and partner accounts are plain keys. Reserved seats get hoarded and resold.", c: "bg-gray-900" },
   ];
   return (
-    <Frame eyebrow="The problem" title={<>10:00:00. Tatkal opens. <span className="text-gray-400">The fastest code wins, not the person who needs the seat.</span></>}>
+    <Frame eyebrow="The problem" title={<>10:00:00. Booking opens. <span className="text-gray-400">The fastest code wins, not the person who needs the seat.</span></>}>
       <div className="grid h-full grid-cols-3 gap-8">
         {items.map((x) => (
           <div key={x.n} className="flex flex-col rounded-[36px] bg-gray-50 p-12">
