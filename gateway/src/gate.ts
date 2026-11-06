@@ -11,6 +11,7 @@ import { slidingCount } from "./ratelimit.ts";
 import { surgePriceInr } from "./pricing.ts";
 import { paymentHeader, paymentRequired, settle } from "./x402.ts";
 import { onAgentSpend } from "./spend.ts";
+import { withinBudget } from "./agents.ts";
 
 // The gate: every provider request comes through here. Cheapest checks first.
 
@@ -75,6 +76,10 @@ async function readRoute(c: Context, drop: import("@surgepass/shared").Drop, url
   }
 
   if (pay) {
+    if (r.kind === "agent" && !(await withinBudget(r.agent, price))) {
+      emit({ kind: "agent", method: req.method, path: url.pathname, status: 402, drop: drop.id, note: `budget reached · ${r.agent}` });
+      return new Response(JSON.stringify({ error: "budget_exceeded" }), { status: 402, headers: { "content-type": "application/json" } });
+    }
     const out = await settle(pay, price);
     if (!out.ok) {
       count("blocked");
@@ -84,7 +89,7 @@ async function readRoute(c: Context, drop: import("@surgepass/shared").Drop, url
     count("paid");
     addRevenue(out.amountInr);
     emit({ kind: r.kind === "anonymous" ? "bot" : r.kind, method: req.method, path: url.pathname, status: 200, drop: drop.id, note: `paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId });
-    if (r.kind === "agent" || out.payer) void onAgentSpend(out.payer ?? (r.kind === "agent" ? r.agent : ""), out.amountInr, out.txId);
+    void onAgentSpend(r.kind === "agent" ? r.agent : (out.payer ?? ""), out.amountInr, out.txId);
     const res = await forward(req, { body });
     const h = new Headers(res.headers);
     h.set("PAYMENT-RESPONSE", out.responseHeader);

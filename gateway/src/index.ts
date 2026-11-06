@@ -13,11 +13,17 @@ import { jwks } from "./keys.ts";
 import { setWinnersHandler, startLifecycle } from "./lottery.ts";
 import { issuePass, startPassExpiry } from "./passes.ts";
 import { currentPrices } from "./pricing.ts";
+import { agents, approvalChallenge } from "./agents.ts";
+import { setApprovalChallenge } from "./api.ts";
+import { discovery } from "./discovery.ts";
 
 const app = new Hono();
 
 app.route("/_sp/admin", admin);
+app.route("/_sp/api", agents);
 app.route("/_sp/api", api);
+app.route("/", discovery);
+setApprovalChallenge(approvalChallenge);
 app.get("/.well-known/jwks.json", async (c) => c.json(await jwks()));
 
 app.all("/_sp/room", serveRoom);
