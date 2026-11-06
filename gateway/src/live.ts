@@ -64,11 +64,24 @@ export function emit(e: Omit<LiveEvent, "ts">) {
     recentPeople.push(ev);
     if (recentPeople.length > 100) recentPeople.shift();
   }
-  if (e.outcome) void redis.pipeline().lpush(OUTCOMES, JSON.stringify(ev)).ltrim(OUTCOMES, 0, 499).exec().catch(() => {});
+  if (e.outcome || (important && e.drop && e.side !== "direct")) {
+    const j = JSON.stringify(ev);
+    const p = redis.pipeline();
+    if (e.outcome) p.lpush(OUTCOMES, j).ltrim(OUTCOMES, 0, 499);
+    if (e.drop) p.lpush(dropLog(e.drop), j).ltrim(dropLog(e.drop), 0, DROP_LOG_MAX - 1);
+    void p.exec().catch(() => {});
+  }
   broadcast({ type: "event", event: ev });
 }
 
 const OUTCOMES = "outcomes";
+const DROP_LOG_MAX = 1000;
+const dropLog = (id: string) => `droplog:${id}`;
+
+/** One drop's history (decisions, entries, draw, passes, Hedera writes), newest first. Bot noise is left out. */
+export async function dropHistory(id: string): Promise<LiveEvent[]> {
+  return (await redis.lrange(dropLog(id), 0, DROP_LOG_MAX - 1)).map((v) => JSON.parse(v) as LiveEvent);
+}
 
 /** Allow/refuse decisions for the Compare page, newest first. Kept in Redis so they survive a console reload. */
 export async function recentOutcomes(): Promise<LiveEvent[]> {

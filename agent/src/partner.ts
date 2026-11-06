@@ -80,7 +80,8 @@ async function paid(path: string, init: { method?: string; body?: unknown } = {}
   return r;
 }
 
-async function findDrop(q?: string) {
+async function findDrop(q?: string, needDetails = false): Promise<any> {
+  if (!needDetails && q && /-partner-[a-z0-9]+$/.test(q)) return { id: q }; // a full drop id: no need to list first
   const r = await call("/_sp/api/partner/drops");
   if (r.status !== 200) {
     console.log(`${r.status} ${JSON.stringify(r.body)}`);
@@ -101,7 +102,7 @@ switch (cmd) {
     out((await call("/_sp/api/partner/drops")).body);
     break;
   case "associate": {
-    const d = await findDrop(dropQuery);
+    const d = await findDrop(dropQuery, true);
     if (!me.live) {
       console.log("local mode: no association needed");
       break;

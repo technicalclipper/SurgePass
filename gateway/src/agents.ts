@@ -117,7 +117,7 @@ function challengeBody(a: Approval, label: string) {
 /** 401 HumanApproval for an agent that tries to enter without a token. */
 export async function approvalChallenge(c: Context, d: Drop): Promise<Response> {
   const body = (await c.req.json().catch(() => ({}))) as { seats?: number; maxBid?: number; agent_account?: string };
-  const agent = c.req.header("x-agent-account") ?? body.agent_account ?? "unknown";
+  const agent = c.req.header("x-agent-account") ?? body.agent_account ?? "an unidentified agent";
   if (!approvable(d)) return c.json({ error: "drop_closed", drop: d.id }, 400);
   const seats = Math.min(d.maxSeatsPerEntry, Math.max(1, Number(body.seats ?? 1)));
   const a = await createApproval("drop", agent, [{ drop: d.id, seats, maxBid: body.maxBid }]);

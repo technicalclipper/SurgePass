@@ -107,7 +107,7 @@ async function requirePartner(c: Context<Env>, next: Next) {
   if (!account || !ts || !sig) return c.json({ error: "partner_signature_required" }, 401);
   const p = await getPartner(account);
   if (!p) {
-    emit({ kind: "bot", method: c.req.method, path: c.req.path, status: 403, note: `not an allowlisted partner · ${account}`, outcome: { actor: "partner", ok: false, who: account, action: `${c.req.path.endsWith("/hold") ? "hold seats" : c.req.path.endsWith("/availability") ? "look at availability" : c.req.path.endsWith("/drops") ? "list partner drops" : "partner API"} · 403 not allowlisted` } });
+    emit({ kind: "bot", method: c.req.method, path: c.req.path, status: 403, drop: /\/drops\/([^/]+)/.exec(c.req.path)?.[1], note: `not an allowlisted partner · ${account}`, outcome: { actor: "partner", ok: false, who: account, action: `${c.req.path.endsWith("/hold") ? "hold seats" : c.req.path.endsWith("/availability") ? "look at availability" : c.req.path.endsWith("/drops") ? "list partner drops" : "partner API"} · 403 not allowlisted` } });
     return c.json({ error: "not_allowlisted" }, 403);
   }
   if (Math.abs(Date.now() - Number(ts)) > 60_000) return c.json({ error: "stale_signature" }, 401);

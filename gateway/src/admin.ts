@@ -5,7 +5,7 @@ import { config } from "./config.ts";
 import { deleteDrop, drops, normalizeDrop, saveDrop } from "./drops.ts";
 import { isPeak, health } from "./mode.ts";
 import { onDropCreated } from "./hooks.ts";
-import { broadcastPublic, emit, recentOutcomes } from "./live.ts";
+import { broadcastPublic, dropHistory, emit, recentOutcomes } from "./live.ts";
 import { redis } from "./redis.ts";
 
 // Provider dashboard API. Bearer ADMIN_TOKEN.
@@ -102,3 +102,4 @@ admin.post("/parse-url", async (c) => {
 
 admin.get("/health", (c) => c.json(health));
 admin.get("/outcomes", async (c) => c.json({ outcomes: await recentOutcomes() }));
+admin.get("/drops/:id/log", async (c) => c.json({ events: await dropHistory(c.req.param("id")) }));
