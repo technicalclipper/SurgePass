@@ -25,13 +25,18 @@ export const health: { upstream: BackendHealth; direct: BackendHealth } = {
   direct: unreachable("B"),
 };
 
-async function poll(url: string, name: string): Promise<BackendHealth> {
+const misses: Record<string, number> = {};
+
+/** Polls a backend's metrics. One slow answer on a busy machine keeps the last reading; only three misses in a row count as unreachable. */
+async function poll(url: string, name: string, last: BackendHealth): Promise<BackendHealth> {
   try {
-    const r = await fetch(`${url}/__provider/metrics`, { signal: AbortSignal.timeout(800) });
+    const r = await fetch(`${url}/__provider/metrics`, { signal: AbortSignal.timeout(2000) });
     const j = (await r.json()) as Omit<BackendHealth, "reachable">;
+    misses[name] = 0;
     return { ...j, name, reachable: true };
   } catch {
-    return unreachable(name);
+    misses[name] = (misses[name] ?? 0) + 1;
+    return misses[name]! >= 3 ? unreachable(name) : last;
   }
 }
 
@@ -82,7 +87,7 @@ function evaluate() {
 
 export function startModeController() {
   setInterval(async () => {
-    [health.upstream, health.direct] = await Promise.all([poll(config.upstream, "A"), poll(config.directProvider, "B")]);
+    [health.upstream, health.direct] = await Promise.all([poll(config.upstream, "A", health.upstream), poll(config.directProvider, "B", health.direct)]);
     evaluate();
   }, 500).unref();
 }

@@ -129,7 +129,7 @@ export function LogStream({ events, max = 60, dense = false, traces = false }: {
       {rows.map((e, i) => {
         const tx = hashscanTx(e.txId);
         return (
-          <div key={`${e.ts}-${i}`} className={`grid grid-cols-[76px_64px_1fr_auto] items-center gap-x-3 border-b border-gray-100 ${dense ? "py-1" : "py-1.5"}`}>
+          <div key={e._id ?? `${e.ts}-${i}`} className={`grid grid-cols-[76px_64px_1fr_auto] items-center gap-x-3 border-b border-gray-100 ${dense ? "py-1" : "py-1.5"}`}>
             <span className="tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
             <span className="inline-flex items-center gap-1.5 font-semibold text-gray-700">
               <span className={`size-2 rounded-full ${DOT[e.kind]}`} />

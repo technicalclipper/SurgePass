@@ -18,6 +18,8 @@ export function Demo() {
   }, [last?.drops.map((d) => d.status).join()]);
   const times = live.stats.map((s) => s.ts);
   const t = last?.totals ?? {};
+  // Real people and their agents: World ID verified, entered, won, booked with a pass. Pinned so a bot flood can't scroll them away.
+  const people = live.people;
   const price = Math.max(0, ...Object.values(last?.prices ?? {}));
   const drawMsg = [...live.other].reverse().find((m) => m.type === "draw" && m.drop === drop?.id);
   const [takeover, setTakeover] = useState<any>(null);
@@ -70,9 +72,15 @@ export function Demo() {
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-error-700">Without SurgePass · what bots get from QuickBook B</div>
           <LogStream events={live.events.filter((e) => e.side === "direct")} max={12} dense />
         </div>
-        <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
-          <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace)} max={6} dense traces />
+          {people.length > 0 && (
+            <div className="mb-2 rounded-xl bg-success-100/60 px-2 py-1">
+              <div className="text-2xs font-semibold uppercase tracking-wide text-success-700">Verified people & agents · pinned</div>
+              <LogStream events={people} max={3} dense traces />
+            </div>
+          )}
+          <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace && e.kind !== "human" && e.kind !== "agent")} max={people.length ? 4 : 6} dense traces />
         </div>
         <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Hedera</div>

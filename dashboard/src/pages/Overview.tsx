@@ -83,7 +83,7 @@ export function Overview() {
         </Panel>
         <Panel title="Live decisions">
           <div className="max-h-72 overflow-y-auto">
-            <LogStream events={live.events} max={40} dense />
+            <LogStream events={live.events} max={40} dense traces />
           </div>
         </Panel>
       </div>

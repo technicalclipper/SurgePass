@@ -44,6 +44,8 @@ export function addRevenue(inr: number) {
 
 const clients = new Map<WebSocket, { admin: boolean }>();
 const recent: LiveEvent[] = [];
+/** Verified people and their agents, kept apart so a bot flood can't push them out. */
+const recentPeople: LiveEvent[] = [];
 const sentThisSecond = { gate: 0, direct: 0 };
 const MAX_EVENTS_PER_SEC = { gate: 40, direct: 15 };
 
@@ -57,6 +59,10 @@ export function emit(e: Omit<LiveEvent, "ts">) {
   sentThisSecond[lane]++;
   recent.push(ev);
   if (recent.length > 300) recent.shift();
+  if (e.side !== "direct" && (e.kind === "human" || e.kind === "agent" || e.kind === "pass")) {
+    recentPeople.push(ev);
+    if (recentPeople.length > 100) recentPeople.shift();
+  }
   broadcast({ type: "event", event: ev });
 }
 
@@ -114,7 +120,7 @@ export function attachLive(server: Server) {
     const isAdmin = url.searchParams.get("token") === config.adminToken;
     wss.handleUpgrade(req, socket, head, (ws) => {
       clients.set(ws, { admin: isAdmin });
-      ws.send(JSON.stringify({ type: "hello", admin: isAdmin, recent: isAdmin ? recent : [] }));
+      ws.send(JSON.stringify({ type: "hello", admin: isAdmin, recent: isAdmin ? recent : [], people: isAdmin ? recentPeople : [] }));
       ws.on("close", () => clients.delete(ws));
     });
   });

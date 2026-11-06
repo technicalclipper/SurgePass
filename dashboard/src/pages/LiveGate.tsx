@@ -29,7 +29,7 @@ export function LiveGate() {
   const live = useLive();
   const [paused, setPaused] = useState<LiveEvent[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
-  const source = paused ?? live.events;
+  const source = paused ?? (filter === "people" ? live.people : live.events);
   const rows = useMemo(() => {
     const traced = source.filter((e) => e.trace && e.side !== "direct");
     const f = traced.filter((e) =>
@@ -81,7 +81,7 @@ export function LiveGate() {
       <div className="grid gap-4 xl:grid-cols-2">
         <AnimatePresence initial={false}>
           {rows.map((e) => (
-            <motion.div key={`${e.ts}-${e.path}-${e.us}`} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <motion.div key={e._id ?? `${e.ts}-${e.path}-${e.us}`} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <TraceCard e={e} />
             </motion.div>
           ))}
