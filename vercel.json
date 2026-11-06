@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci --workspace dashboard --include-workspace-root",
+  "buildCommand": "VITE_HOSTED=1 npm run build -w dashboard",
+  "outputDirectory": "dashboard/dist"
+}

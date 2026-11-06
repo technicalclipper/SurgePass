@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import nodeVerify from "../../../docs/integration/verify.mjs?raw";
+import { HOSTED, REPO_URL } from "../lib/api";
 import { CodeWindow } from "../ui/code";
 
 // The console's front page: what SurgePass is, who it's for, and how it works. Public (no sign-in).
@@ -8,6 +9,7 @@ import { CodeWindow } from "../ui/code";
 // blue = Hedera / partners.
 
 const go = (hash: string) => (location.hash = hash);
+const github = () => window.open(REPO_URL, "_blank", "noopener");
 
 export function Landing() {
   return (
@@ -92,8 +94,8 @@ function Nav() {
             </button>
           ))}
         </nav>
-        <button onClick={() => go("overview")} className="inline-flex h-10 items-center rounded-full bg-gray-900 px-5 text-sm font-semibold text-gray-0 transition hover:bg-gray-700">
-          Open console
+        <button onClick={() => (HOSTED ? github() : go("overview"))} className="inline-flex h-10 items-center rounded-full bg-gray-900 px-5 text-sm font-semibold text-gray-0 transition hover:bg-gray-700">
+          {HOSTED ? "GitHub ↗" : "Open console"}
         </button>
       </div>
     </header>
@@ -120,10 +122,21 @@ function Hero() {
             SurgePass sits in front of your site at the busiest minute. People prove they're human with World ID and enter a draw anyone can check on Hedera. Their agents act with permission. Partners book within rules. Bots get nowhere, and your servers stay calm.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <Button onClick={() => go("overview")}>Open console →</Button>
-            <Button kind="secondary" onClick={() => go("demo")}>
-              Watch the crash demo
-            </Button>
+            {HOSTED ? (
+              <>
+                <Button onClick={() => scrollTo("how")}>See how it works</Button>
+                <Button kind="secondary" onClick={github}>
+                  View on GitHub ↗
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => go("overview")}>Open console →</Button>
+                <Button kind="secondary" onClick={() => go("demo")}>
+                  Watch the crash demo
+                </Button>
+              </>
+            )}
           </div>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.15 }} className="mt-16">
@@ -223,7 +236,7 @@ function GateVisual() {
           </div>
         </div>
       </div>
-      <p className="mt-3 text-center text-xs text-gray-400">Illustration with simulated traffic. The console shows the real thing.</p>
+      <p className="mt-3 text-center text-xs text-gray-400">Illustration with simulated traffic.{HOSTED ? "" : " The console shows the real thing."}</p>
     </div>
   );
 }
@@ -377,11 +390,13 @@ function Proof() {
           <p className="mt-4 text-lg leading-compact text-gray-0/60">
             Every entry, the cutoff, the random seed and the result go to the drop's own Hedera topic. Anyone can rebuild the draw from public data and get the same winners. Once entries close, nobody, the provider included, can change who wins.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button kind="light" onClick={() => go("proofs")}>
-              See the proofs
-            </Button>
-          </div>
+          {!HOSTED && (
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button kind="light" onClick={() => go("proofs")}>
+                See the proofs
+              </Button>
+            </div>
+          )}
         </div>
         <div className="overflow-hidden rounded-2xl bg-[#0d1117] ring-1 ring-gray-0/10">
           <div className="flex items-center gap-1.5 border-b border-gray-0/10 bg-[#161b22] px-4 py-3">
@@ -446,10 +461,21 @@ function Closing() {
         <h2 className="mx-auto max-w-3xl text-4xl font-semibold leading-narrow tracking-[-0.02em] sm:text-5xl">Put a fair line in front of your next rush.</h2>
         <p className="mx-auto mt-4 max-w-xl text-lg text-gray-500">Set up a drop, pick its lane, and watch who gets through.</p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Button onClick={() => go("overview")}>Open console →</Button>
-          <Button kind="light" onClick={() => go("compare")}>
-            Run the tests
-          </Button>
+          {HOSTED ? (
+            <>
+              <Button onClick={() => go("integrate")}>Integration guide →</Button>
+              <Button kind="light" onClick={github}>
+                View on GitHub ↗
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => go("overview")}>Open console →</Button>
+              <Button kind="light" onClick={() => go("compare")}>
+                Run the tests
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </section>

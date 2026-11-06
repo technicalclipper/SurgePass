@@ -3,7 +3,7 @@ import nodeVerify from "../../../docs/integration/verify.mjs?raw";
 import pyVerify from "../../../docs/integration/verify.py?raw";
 import javaVerify from "../../../docs/integration/SurgePass.java?raw";
 import goVerify from "../../../docs/integration/surgepass.go?raw";
-import { admin } from "../lib/api";
+import { admin, HOSTED } from "../lib/api";
 import { CodeWindow, CopyButton, type Lang } from "../ui/code";
 import { Segmented } from "../ui/console";
 
@@ -140,6 +140,21 @@ const CLAIMS: { name: string; example: string; use: string }[] = [
   { name: "requested / exp", example: "2 · +300 s", use: "Seats asked for · the header expires 5 minutes after the request." },
 ];
 
+/** Example values for the public guide (no gateway to ask). */
+const SAMPLE: Integration = {
+  origin: "https://tickets.example.com",
+  upstream: "https://origin.tickets.example.com",
+  jwksUrl: "https://gate.example.com/.well-known/jwks.json",
+  issuer: "surgepass",
+  audience: "tickets.example.com",
+  testAudience: "test.surgepass",
+  header: "X-SurgePass-Assertion",
+  algorithm: "EdDSA (Ed25519)",
+  typ: "assertion",
+  ttlSec: 300,
+  confirmedSeatsField: "seats_booked",
+};
+
 const card = "rounded-3xl bg-gray-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
 
 export function Integrate() {
@@ -148,6 +163,7 @@ export function Integrate() {
   const [view, setView] = useState<"verify" | "handler">("verify");
 
   useEffect(() => {
+    if (HOSTED) return setInfo(SAMPLE);
     void admin<Integration>("/integration").then(setInfo, () => {});
   }, []);
 
@@ -210,8 +226,8 @@ export function Integrate() {
             badge={
               view === "verify" ? (
                 l.tested ? (
-                  <span className="rounded-md bg-[#238636]/25 px-2 py-1 text-2xs font-semibold text-[#3fb950]" title="Run against this gateway: valid, missing, forged, expired and test-audience tokens">
-                    ✓ Tested on this gateway
+                  <span className="rounded-md bg-[#238636]/25 px-2 py-1 text-2xs font-semibold text-[#3fb950]" title="Run against a live SurgePass gateway: valid, missing, forged, expired and test-audience tokens">
+                    ✓ Tested against a live gateway
                   </span>
                 ) : (
                   <span className="rounded-md bg-gray-0/10 px-2 py-1 text-2xs font-semibold text-gray-0/60" title="Go isn't installed on this machine, so this snippet hasn't been run here">
@@ -258,7 +274,7 @@ export function Integrate() {
         </aside>
       </section>
 
-      <TestToken info={info} />
+      {!HOSTED && <TestToken info={info} />}
     </div>
   );
 }

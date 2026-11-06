@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { admin, GATEWAY, getToken, setToken } from "./lib/api";
+import { admin, GATEWAY, getToken, HOSTED, REPO_URL, setToken } from "./lib/api";
 import { useLive } from "./lib/live";
 import { Compare } from "./pages/Compare";
 import { Integrate } from "./pages/Integrate";
@@ -65,6 +65,7 @@ export function App() {
     );
   }, []);
   if (!hash) return <Landing />;
+  if (HOSTED) return hash === "integrate" ? <PublicPage><Integrate /></PublicPage> : <HostedNotice />;
   if (ok === null) return null;
   if (!ok) return <Login onDone={() => setOk(true)} />;
   return <Shell />;
@@ -97,6 +98,53 @@ function Login({ onDone }: { onDone: () => void }) {
           <Btn type="submit">Sign in</Btn>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** Hosted build: a light frame for the public integration guide. */
+function PublicPage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="sticky top-0 z-40 border-b border-gray-100 bg-gray-0/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+          <button onClick={() => (location.hash = "")}>
+            <Logo />
+          </button>
+          <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-full bg-gray-900 px-5 text-sm font-semibold text-gray-0 hover:bg-gray-700">
+            GitHub ↗
+          </a>
+        </div>
+      </header>
+      <main className="mx-auto max-w-7xl px-6 py-10">{children}</main>
+    </div>
+  );
+}
+
+/** Hosted build: console pages need a gateway, which runs alongside the live demo. */
+function HostedNotice() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-gray-50 px-6">
+      <div className="w-full max-w-lg rounded-3xl bg-gray-0 p-8 text-center shadow-card sm:p-10">
+        <div className="flex justify-center">
+          <Logo />
+        </div>
+        <h1 className="mt-8 text-3xl font-semibold tracking-[-0.02em]">The console runs next to a gateway</h1>
+        <p className="mt-3 leading-compact text-gray-500">
+          The provider console talks to a running SurgePass gateway: live traffic, drops, draws on Hedera and test runs. This public site has no gateway behind it, so you'll see the console in the live demo.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <button onClick={() => (location.hash = "")} className="inline-flex h-12 items-center rounded-full bg-gray-900 px-6 text-base font-semibold text-gray-0 hover:bg-gray-700">
+            Back to home
+          </button>
+          <button onClick={() => (location.hash = "integrate")} className="inline-flex h-12 items-center rounded-full bg-gray-100 px-6 text-base font-semibold text-gray-900 hover:bg-gray-200">
+            Integration guide
+          </button>
+        </div>
+        <a href={REPO_URL} target="_blank" rel="noreferrer" className="mt-6 inline-block text-sm font-semibold text-info-600 hover:underline">
+          Code on GitHub ↗
+        </a>
+      </div>
     </div>
   );
 }

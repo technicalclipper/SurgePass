@@ -1,5 +1,9 @@
 // Admin API on the gateway (bearer ADMIN_TOKEN, entered once and kept in this browser).
 
+/** The public static build: landing page and integration guide only, no gateway to talk to. */
+export const HOSTED = import.meta.env.VITE_HOSTED === "1";
+export const REPO_URL = "https://github.com/technicalclipper/SurgePass";
+
 export const GATEWAY: string = (import.meta.env.VITE_GATEWAY_ORIGIN as string | undefined) ?? "http://localhost:8080";
 
 export function getToken() {
