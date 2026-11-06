@@ -12,18 +12,21 @@ import { broadcast, emit } from "./live.ts";
 // and streams progress to the console. The gate's own allow/refuse decisions land in the Compare
 // columns as usual; a job only drives the client side.
 
-type Step = { label: string; script?: "cli" | "partner"; args?: string[]; fn?: () => Promise<{ code: number; out: string }>; expect?: RegExp; approval?: boolean; repeatUntil?: RegExp; everyMs?: number; maxMs?: number };
-type Scenario = { title: string; who: string; pools: Drop["pool"][]; build: (d: Drop) => Step[] | string };
+type Step = { label: string; script?: "cli" | "partner"; args?: string[]; fn?: () => Promise<{ code: number; out: string }>; expect?: RegExp; /** The point of this step is to be turned away: matching `expect` means it was refused. */ refused?: boolean; approval?: boolean; repeatUntil?: RegExp; everyMs?: number; maxMs?: number };
+/** `expect`: what should happen to this actor at the gate. A "refused" case passes when it is blocked. */
+type Scenario = { title: string; who: string; expect: "allowed" | "refused"; pools: Drop["pool"][]; build: (d: Drop) => Step[] | string };
 
 export interface Job {
   id: string;
   scenario: string;
   title: string;
   who: string;
-  status: "running" | "waiting_approval" | "done" | "failed";
+  /** done: let through as expected · blocked: turned away as expected · failed: something else happened. */
+  status: "running" | "waiting_approval" | "done" | "blocked" | "failed";
+  expect: "allowed" | "refused";
   drop: string;
   dropLabel: string;
-  steps: { label: string; status: "pending" | "running" | "ok" | "failed"; out?: string }[];
+  steps: { label: string; status: "pending" | "running" | "ok" | "refused" | "failed"; out?: string }[];
   approvalUrl?: string;
   startedAt: number;
   endedAt?: number;
@@ -38,6 +41,7 @@ const AVAIL = "/availability/12007/2026-11-06/CC?quota=TQ";
 const SCENARIOS: Record<string, Scenario> = {
   "agent-normal": {
     title: "Agent enters the draw",
+    expect: "allowed",
     who: "Your agent",
     pools: ["normal"],
     build: (d) => {
@@ -52,6 +56,7 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   "agent-premium": {
     title: "Agent bids in the auction",
+    expect: "allowed",
     who: "Your agent",
     pools: ["premium"],
     build: (d) => {
@@ -66,12 +71,14 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   rogue: {
     title: "Rogue agent, no human behind it",
+    expect: "refused",
     who: "Script with no World ID",
     pools: ["normal", "premium"],
-    build: (d) => [{ label: d.pool === "premium" ? "Place a sealed bid with no approval" : "Enter the draw with no approval", script: "cli", args: ["rogue", d.id], expect: /^401/m }],
+    build: (d) => [{ label: d.pool === "premium" ? "Place a sealed bid with no approval" : "Enter the draw with no approval", script: "cli", args: ["rogue", d.id], expect: /^401/m, refused: true }],
   },
   "partner-tripnest": {
     title: "Allowlisted partner books seats",
+    expect: "allowed",
     who: "TripNest",
     pools: ["partner"],
     build: (d) => [
@@ -86,15 +93,17 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   "partner-unlisted": {
     title: "Company that isn't allowlisted",
+    expect: "refused",
     who: "BulkSeats",
     pools: ["partner"],
     build: (d) => [
-      { label: "Look at partner availability", script: "partner", args: ["--as", "bulkseats", "look", d.id], expect: /403|not_allowlisted/ },
-      { label: "Try to hold 4 seats", script: "partner", args: ["--as", "bulkseats", "hold", d.id, "4"], expect: /403|not_allowlisted/ },
+      { label: "Look at partner availability", script: "partner", args: ["--as", "bulkseats", "look", d.id], expect: /403|not_allowlisted/, refused: true },
+      { label: "Try to hold 4 seats", script: "partner", args: ["--as", "bulkseats", "hold", d.id, "4"], expect: /403|not_allowlisted/, refused: true },
     ],
   },
   "hedera-probe": {
     title: "Slip a seat token to a non-partner",
+    expect: "refused",
     who: "Account without KYC",
     pools: ["partner"],
     build: (d) => {
@@ -106,11 +115,12 @@ const SCENARIOS: Record<string, Scenario> = {
         { label: `${account} associates the seat token (but has no KYC)`, fn: () => associate(account, process.env.AGENT_PRIVATE_KEY, tokenId) },
         {
           label: `Send seat token ${tokenId} to ${account} on Hedera`,
+          refused: true,
           fn: async () => {
             const r = await fetch(`http://localhost:${config.port}/_sp/admin/partners/probe`, { method: "POST", headers: { authorization: `Bearer ${config.adminToken}`, "content-type": "application/json" }, body: JSON.stringify({ drop: d.id, account }) });
             const b = (await r.json()) as { refused?: boolean; code?: string; error?: string };
             if (b.error) return { code: 1, out: b.error === "no_free_seat_to_probe" ? "Not sent: every partner seat is already handed out (reset the drops for free seats)" : `Not sent: ${b.error}` };
-            return { code: b.refused ? 0 : 1, out: b.refused ? `Hedera refused: ${b.code}` : "Hedera accepted the transfer: this account was allowlisted" };
+            return { code: b.refused ? 0 : 1, out: b.refused ? `Refused by Hedera, as expected: ${b.code} (this account has no KYC on the seat token)` : "⚠ Hedera accepted the transfer: this account had KYC on the seat token" };
           },
         },
       ];
@@ -181,21 +191,21 @@ async function run(j: Job, steps: Step[]) {
     } else if (j.status === "waiting_approval" && i > 0 && steps[i - 1]!.approval) j.status = "running";
     // A step with an expected result passes on that result (a refusal we want is a non-zero exit for the CLIs).
     const ok = (s.expect ? s.expect.test(r.out) : r.code === 0) && (!s.repeatUntil || s.repeatUntil.test(r.out));
-    st.status = ok ? "ok" : "failed";
+    st.status = !ok ? "failed" : s.refused ? "refused" : "ok";
     publish(j);
     if (!ok) {
       j.status = "failed";
       break;
     }
   }
-  if (j.status !== "failed") j.status = "done";
+  if (j.status !== "failed") j.status = j.steps.some((x) => x.status === "refused") ? "blocked" : "done";
   j.endedAt = Date.now();
   emit({ kind: "system", drop: j.drop, note: `job ${j.status}: ${j.title} · ${j.who}` });
   publish(j);
 }
 
 export function registerJobsAdmin(admin: Hono) {
-  admin.get("/jobs", (c) => c.json({ jobs, scenarios: Object.entries(SCENARIOS).map(([id, s]) => ({ id, title: s.title, who: s.who, pools: s.pools })) }));
+  admin.get("/jobs", (c) => c.json({ jobs, scenarios: Object.entries(SCENARIOS).map(([id, s]) => ({ id, title: s.title, who: s.who, expect: s.expect, pools: s.pools })) }));
 
   /** Start a scenario against one drop: body { drop }. */
   admin.post("/jobs/:scenario", async (c) => {
@@ -211,7 +221,7 @@ export function registerJobsAdmin(admin: Hono) {
     if (id.startsWith("agent-") && Object.keys(SCENARIOS).some((x) => x.startsWith("agent-") && busy(x))) return c.json({ error: "One agent job at a time: they share the agent's wallet and approvals" }, 409);
     const steps = sc.build(d);
     if (typeof steps === "string") return c.json({ error: steps }, 400);
-    const j: Job = { id: Math.random().toString(36).slice(2, 10), scenario: id, title: sc.title, who: sc.who, drop: d.id, dropLabel: d.label, status: "running", steps: steps.map((s) => ({ label: s.label, status: "pending" })), startedAt: Date.now() };
+    const j: Job = { id: Math.random().toString(36).slice(2, 10), scenario: id, title: sc.title, who: sc.who, expect: sc.expect, drop: d.id, dropLabel: d.label, status: "running", steps: steps.map((s) => ({ label: s.label, status: "pending" })), startedAt: Date.now() };
     jobs.unshift(j);
     if (jobs.length > 50) jobs.pop();
     emit({ kind: "system", drop: d.id, note: `job started: ${j.title} · ${j.who}` });

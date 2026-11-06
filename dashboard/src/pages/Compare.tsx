@@ -17,8 +17,10 @@ interface Job {
   who: string;
   drop: string;
   dropLabel: string;
-  status: "running" | "waiting_approval" | "done" | "failed";
-  steps: { label: string; status: "pending" | "running" | "ok" | "failed"; out?: string }[];
+  /** done: let through as expected · blocked: turned away as expected · failed: something else happened. */
+  status: "running" | "waiting_approval" | "done" | "blocked" | "failed";
+  expect: "allowed" | "refused";
+  steps: { label: string; status: "pending" | "running" | "ok" | "refused" | "failed"; out?: string }[];
   approvalUrl?: string;
   startedAt: number;
   endedAt?: number;
@@ -28,6 +30,7 @@ interface Scenario {
   id: string;
   title: string;
   who: string;
+  expect: "allowed" | "refused";
   pools: Drop["pool"][];
 }
 
@@ -232,7 +235,10 @@ function RunCard({ s, drops, selected, jobs }: { s: Scenario; drops: Drop[]; sel
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold">{s.title}</div>
-          <div className="text-2xs text-gray-500">{s.who}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-2xs text-gray-500">
+            {s.who}
+            <span className={`rounded-full px-1.5 py-px font-semibold ${s.expect === "refused" ? "bg-error-100 text-error-700" : "bg-success-100 text-success-700"}`}>should be {s.expect === "refused" ? "turned away" : "let through"}</span>
+          </div>
         </div>
         <button
           disabled={busy || starting || !target}
@@ -266,8 +272,16 @@ function RunCard({ s, drops, selected, jobs }: { s: Scenario; drops: Drop[]; sel
 
 function JobCard({ j, showDrop }: { j: Job; showDrop: boolean }) {
   const [open, setOpen] = useState(false);
-  const done = j.steps.filter((s) => s.status === "ok").length;
-  const tone = j.status === "done" ? "text-success-700 bg-success-100" : j.status === "failed" ? "text-error-700 bg-error-100" : "text-warning-700 bg-warning-100";
+  const done = j.steps.filter((s) => s.status === "ok" || s.status === "refused").length;
+  const chip = {
+    running: { label: "running", cls: "bg-warning-100 text-warning-700" },
+    waiting_approval: { label: "needs World ID", cls: "bg-info-100 text-info-700" },
+    done: { label: "✓ let through", cls: "bg-success-100 text-success-700" },
+    blocked: { label: "✕ blocked", cls: "bg-error-100 text-error-700" },
+    failed: { label: j.expect === "refused" ? "⚠ not blocked" : "⚠ didn't get through", cls: "bg-warning-100 text-warning-700" },
+  }[j.status];
+  const verdict =
+    j.status === "blocked" ? "Turned away, as expected" : j.status === "done" ? "Let through, as expected" : j.status === "failed" ? (j.expect === "refused" ? "Expected to be turned away, but it wasn't" : "Expected to get through, but it didn't") : null;
   return (
     <div className="rounded-2xl border border-gray-100 bg-gray-0 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -280,8 +294,9 @@ function JobCard({ j, showDrop }: { j: Job; showDrop: boolean }) {
             {ago(Date.now() - j.startedAt)} ago · {done}/{j.steps.length} steps
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold uppercase ${tone}`}>{j.status === "waiting_approval" ? "needs World ID" : j.status}</span>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold uppercase ${chip.cls}`}>{chip.label}</span>
       </div>
+      {verdict && <div className={`mt-2 rounded-lg px-2.5 py-1.5 text-2xs font-semibold ${chip.cls}`}>{verdict}</div>}
       {j.status === "waiting_approval" && j.approvalUrl && (
         <a href={j.approvalUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex items-center justify-center gap-2 rounded-xl bg-info-600 px-3 py-2.5 text-sm font-semibold text-gray-0 hover:opacity-90">
           Open approval page · scan with World App ↗
@@ -292,12 +307,16 @@ function JobCard({ j, showDrop }: { j: Job; showDrop: boolean }) {
           <li key={i} className="flex items-start gap-2 text-xs">
             <span
               className={`mt-px grid size-4 shrink-0 place-items-center rounded-full text-[9px] font-bold ${
-                s.status === "ok" ? "bg-success-600 text-gray-0" : s.status === "failed" ? "bg-error-600 text-gray-0" : s.status === "running" ? "bg-gray-900 text-gray-0" : "bg-gray-100 text-gray-500"
+                s.status === "ok" ? "bg-success-600 text-gray-0" : s.status === "refused" ? "bg-error-600 text-gray-0" : s.status === "failed" ? "bg-warning-600 text-gray-0" : s.status === "running" ? "bg-gray-900 text-gray-0" : "bg-gray-100 text-gray-500"
               }`}
             >
-              {s.status === "ok" ? "✓" : s.status === "failed" ? "✕" : s.status === "running" ? <span className="size-2 animate-spin rounded-full border border-gray-0/30 border-t-gray-0" /> : i + 1}
+              {s.status === "ok" ? "✓" : s.status === "refused" ? "✕" : s.status === "failed" ? "!" : s.status === "running" ? <span className="size-2 animate-spin rounded-full border border-gray-0/30 border-t-gray-0" /> : i + 1}
             </span>
-            <span className={s.status === "pending" ? "text-gray-400" : "text-gray-900"}>{s.label}</span>
+            <span className={s.status === "pending" ? "text-gray-400" : "text-gray-900"}>
+              {s.label}
+              {s.status === "refused" && <span className="ml-1.5 font-semibold text-error-700">· refused, as expected</span>}
+              {s.status === "failed" && <span className="ml-1.5 font-semibold text-warning-700">· not what should happen</span>}
+            </span>
           </li>
         ))}
       </ol>
