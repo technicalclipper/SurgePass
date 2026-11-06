@@ -13,7 +13,7 @@
   "scripts": {
     "setup:hedera": "tsx scripts/setup-hedera.ts",
     "setup:keys": "tsx scripts/gen-keys.ts",
-    "dev:provider": "tsx watch provider-mock/src/index.ts",
+    "dev:provider": "tsx watch --include config/catalog.json provider-mock/src/index.ts",
     "dev:gateway": "WAITING_ROOM_DEV=1 tsx watch gateway/src/index.ts",
     "dev:agent": "tsx watch agent/src/mcp-server.ts",
     "dev:waiting-room": "npm run dev -w waiting-room",
