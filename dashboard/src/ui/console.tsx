@@ -87,68 +87,111 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
   );
 }
 
-const DOT: Record<LiveEvent["kind"], string> = {
-  bot: "bg-error-600",
-  agent: "bg-purple",
-  human: "bg-success-600",
-  surge: "bg-warning-600",
-  draw: "bg-info-600",
-  pass: "bg-gray-900",
-  system: "bg-gray-400",
-  forward: "bg-gray-300",
+const KIND: Record<LiveEvent["kind"], { label: string; cls: string }> = {
+  bot: { label: "BOT", cls: "bg-error-100 text-error-700" },
+  agent: { label: "AGENT", cls: "bg-purple-soft text-purple" },
+  human: { label: "HUMAN", cls: "bg-success-100 text-success-700" },
+  surge: { label: "SURGE", cls: "bg-warning-100 text-warning-700" },
+  draw: { label: "DRAW", cls: "bg-info-100 text-info-700" },
+  pass: { label: "PASS", cls: "bg-gray-900 text-gray-0" },
+  system: { label: "SYSTEM", cls: "bg-gray-100 text-gray-700" },
+  forward: { label: "PASS-THROUGH", cls: "bg-gray-100 text-gray-500" },
 };
-const LABEL: Record<LiveEvent["kind"], string> = { bot: "BOT", agent: "AGENT", human: "HUMAN", surge: "SURGE", draw: "DRAW", pass: "PASS", system: "SYS", forward: "FWD" };
 
-/** One-line summary of how the gate handled a request: the steps that decided it, ✓ / ✗, and the gate's time. */
+/** Chip for who/what a log line is about. World ID attempts get their own label, green if allowed, red if refused. */
+export function kindChip(e: LiveEvent): { label: string; cls: string } {
+  if (e.side === "direct") return { label: "BOT → SITE B", cls: "bg-error-100 text-error-700" };
+  if (e.path?.includes("/world/verify")) return { label: "WORLD ID", cls: (e.status ?? 0) >= 400 ? "bg-error-100 text-error-700" : "bg-success-100 text-success-700" };
+  return KIND[e.kind];
+}
+
+function statusChip(status?: number) {
+  if (!status) return null;
+  const cls =
+    status >= 500 ? "bg-error-600 text-gray-0" : status >= 400 ? "bg-error-100 text-error-700" : status >= 300 ? "bg-warning-100 text-warning-700" : "bg-success-100 text-success-700";
+  const word = status === 302 ? "→ waiting room" : status === 402 ? "pay" : status === 401 ? "not allowed" : status === 403 ? "blocked" : status === 409 ? "duplicate" : status === 429 ? "too many" : status >= 500 ? "site down" : status < 300 ? "ok" : "";
+  return (
+    <span className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 font-mono text-xs font-semibold ${cls}`}>
+      {status}
+      {word && <span className="font-sans font-medium opacity-80">{word}</span>}
+    </span>
+  );
+}
+
+const STEP: Record<string, string> = {
+  match: "match",
+  peak: "peak",
+  identity: "who",
+  world: "World ID",
+  entry: "entry",
+  pass: "pass",
+  quota: "quota",
+  payment: "x402",
+  budget: "budget",
+  decision: "decision",
+  upstream: "provider",
+};
+
+/** How the gate handled a request: each deciding step with ✓ / ✗, and the gate's time. */
 export function TraceLine({ e }: { e: LiveEvent }) {
   if (!e.trace?.length) return null;
-  const shown = e.trace.filter((s) => s.step !== "request" && s.step !== "upstream");
+  const shown = e.trace.filter((s) => s.step !== "request");
   return (
-    <div className="col-span-4 -mt-0.5 mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[152px] font-sans text-2xs text-gray-500">
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       {shown.map((s, i) => (
-        <span key={i} className="inline-flex items-center gap-1">
-          {i > 0 && <span className="text-gray-300">→</span>}
-          <span className={s.ok === false ? "text-error-600" : s.ok === true ? "text-success-700" : "text-gray-700"}>
-            {s.ok === false ? "✗ " : s.ok === true ? "✓ " : ""}
-            {s.step === "decision" ? <b className="text-gray-900">{short(s.detail)}</b> : short(s.detail)}
+        <span
+          key={i}
+          title={s.detail}
+          className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+            s.step === "decision" ? "bg-gray-900 text-gray-0" : s.ok === false ? "bg-error-100 text-error-700" : s.ok === true ? "bg-success-100 text-success-700" : "bg-gray-100 text-gray-700"
+          }`}
+        >
+          <span className="shrink-0 font-semibold">
+            {s.step === "decision" ? "⇒" : s.ok === false ? "✗" : s.ok === true ? "✓" : "•"} {STEP[s.step] ?? s.step}
           </span>
+          <span className="truncate">{short(s.detail)}</span>
         </span>
       ))}
-      {e.us !== undefined && <span className="ml-1 rounded bg-gray-100 px-1 font-mono text-gray-700">{e.us < 1000 ? `${e.us} µs` : `${(e.us / 1000).toFixed(1)} ms`}</span>}
+      {e.us !== undefined && <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">gate {e.us < 1000 ? `${e.us} µs` : `${(e.us / 1000).toFixed(1)} ms`}</span>}
     </div>
   );
 }
 
-const short = (d: string) => (d.length > 70 ? d.slice(0, 68) + "…" : d);
+const short = (d: string) => (d.length > 64 ? d.slice(0, 62) + "…" : d);
 
 export function LogStream({ events, max = 60, dense = false, traces = false }: { events: LiveEvent[]; max?: number; dense?: boolean; traces?: boolean }) {
   const rows = events.slice(-max).reverse();
   return (
-    <div className="flex flex-col font-mono text-xs">
-      {rows.length === 0 && <div className="py-8 text-center font-sans text-sm text-gray-400">Waiting for traffic…</div>}
+    <div className="flex flex-col gap-1.5">
+      {rows.length === 0 && <div className="py-8 text-center text-sm text-gray-400">Waiting for traffic…</div>}
       {rows.map((e, i) => {
         const tx = hashscanTx(e.txId);
+        const k = kindChip(e);
+        const bad = (e.status ?? 0) >= 400 || e.trace?.some((s) => s.ok === false && s.step !== "quota" && s.step !== "payment");
         return (
-          <div key={e._id ?? `${e.ts}-${i}`} className={`grid grid-cols-[76px_64px_1fr_auto] items-center gap-x-3 border-b border-gray-100 ${dense ? "py-1" : "py-1.5"}`}>
-            <span className="tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
-            <span className="inline-flex items-center gap-1.5 font-semibold text-gray-700">
-              <span className={`size-2 rounded-full ${DOT[e.kind]}`} />
-              {e.side === "direct" ? "BOT→B" : LABEL[e.kind]}
-            </span>
-            <span className="truncate text-gray-900">
-              {e.method && <span className="text-gray-500">{e.method} </span>}
-              {e.path && <span>{e.path} </span>}
-              {e.status && <span className="text-gray-500">→ {e.status} </span>}
-              <span className="text-gray-700">{e.note}</span>
-              {e.hcsSeq ? <span className="text-gray-500"> · HCS #{e.hcsSeq}</span> : null}
-            </span>
-            <span>
+          <div
+            key={e._id ?? `${e.ts}-${i}`}
+            className={`rounded-xl border-l-4 bg-gray-50 px-3 ${dense ? "py-1.5" : "py-2"} ${
+              e.kind === "human" || e.kind === "agent" ? (bad ? "border-error-600" : "border-success-600") : e.side === "direct" ? "border-error-600" : (e.status ?? 0) >= 300 ? "border-warning-600" : "border-gray-200"
+            }`}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 font-mono text-xs tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
+              <span className={`inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold tracking-wide ${k.cls}`}>{k.label}</span>
+              {statusChip(e.status)}
+              {e.path && (
+                <code className="min-w-0 truncate font-mono text-sm text-gray-900">
+                  {e.method && <span className="text-gray-500">{e.method} </span>}
+                  {e.path}
+                </code>
+              )}
               {tx && (
-                <a href={tx} target="_blank" rel="noreferrer" className="font-sans font-semibold text-info-600">
-                  tx ↗
+                <a href={tx} target="_blank" rel="noreferrer" className="ml-auto shrink-0 text-xs font-semibold text-info-600">
+                  HashScan ↗
                 </a>
               )}
-            </span>
+            </div>
+            {e.note && <div className={`mt-0.5 text-sm ${bad ? "text-error-700" : "text-gray-700"}`}>{e.note}{e.hcsSeq ? <span className="text-gray-500"> · HCS #{e.hcsSeq}</span> : null}</div>}
             {traces && <TraceLine e={e} />}
           </div>
         );

@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { hashscanTx } from "../lib/api";
 import { useLive, type LiveEvent, type TraceStep } from "../lib/live";
-import { Panel, Segmented } from "../ui/console";
+import { kindChip, Panel, Segmented } from "../ui/console";
 import { FloodControl } from "../ui/flood";
 
 // Every request the reverse proxy handled, step by step: what came in, which drop it matched,
@@ -13,6 +13,8 @@ const LABEL: Record<TraceStep["step"], string> = {
   match: "Route match",
   peak: "Peak mode",
   identity: "Who sent it",
+  world: "World ID",
+  entry: "Draw entry",
   pass: "Pass check",
   quota: "Free quota",
   payment: "x402 payment",
@@ -99,7 +101,9 @@ function TraceCard({ e }: { e: LiveEvent }) {
     <div className={`rounded-2xl border-l-4 bg-gray-0 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${tone}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs font-semibold uppercase ${who}`}>{e.kind === "forward" ? "pass-through" : e.kind}</span>
+          <span className={`inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs font-semibold uppercase ${e.path?.includes("/world/verify") ? kindChip(e).cls : who}`}>
+            {e.path?.includes("/world/verify") ? "World ID" : e.kind === "forward" ? "pass-through" : e.kind}
+          </span>
           <code className="truncate font-mono text-xs">
             {e.method} {e.trace?.[0]?.detail.replace(/^\S+\s/, "") ?? e.path}
           </code>

@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import type { Drop } from "@surgepass/shared";
+import type { Drop, TraceStep } from "@surgepass/shared";
 import { drops } from "./drops.ts";
 import { issueSession, who } from "./identity.ts";
 import { count, emit } from "./live.ts";
@@ -68,17 +68,53 @@ api.post("/world/verify", async (c) => {
   const { dropId, result } = (await c.req.json().catch(() => ({}))) as { dropId?: string; result?: unknown };
   const d = dropId ? drops.get(dropId) : undefined;
   if (!d) return c.json({ error: "not_found" }, 404);
-  if (!(await allow(`verify:${clientIp(c)}`, VERIFY_PER_MIN, 60))) return c.json({ error: "rate_limited" }, 429);
+  const trace: TraceStep[] = [{ step: "request", detail: `POST /_sp/api/world/verify · ${d.label}` }];
+  if (!(await allow(`verify:${clientIp(c)}`, VERIFY_PER_MIN, 60))) {
+    trace.push({ step: "world", detail: `too many verification attempts from this address (limit ${VERIFY_PER_MIN}/min)`, ok: false }, { step: "decision", detail: "429 not allowed · no session" });
+    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 429, note: "World ID: rate limited → not allowed", trace });
+    return c.json({ error: "rate_limited" }, 429);
+  }
   const v = await verifyProof(result, enterAction(d.id));
+  const env = config.world.configured ? config.world.environment : "local simulator";
   if (!v.ok) {
-    emit({ kind: "bot", drop: d.id, path: "/_sp/api/world/verify", status: 401, note: `World ID rejected: ${v.reason}` });
+    const at: Record<string, number> = { malformed: 0, unknown_nonce: 1, action_mismatch: 2, signal_mismatch: 2, environment_mismatch: 3, rejected_by_world: 4 };
+    const checks = [
+      "looks like a World ID proof",
+      "proof was requested by SurgePass (one-time nonce, never used before)",
+      `bound to this drop (action enter:${d.id})`,
+      `environment ${env}, pinned on the server`,
+      config.world.configured ? "verified by the World Developer Portal" : "accepted by the local simulator",
+    ];
+    const failAt = at[v.reason] ?? 4;
+    checks.slice(0, failAt).forEach((detail) => trace.push({ step: "world", detail, ok: true }));
+    trace.push({ step: "world", detail: WORLD_FAIL[v.reason] ?? v.reason, ok: false });
+    trace.push({ step: "decision", detail: "401 not allowed · no session, cannot enter the draw" });
+    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 401, note: `World ID verification failed: ${WORLD_FAIL[v.reason] ?? v.reason} → not allowed`, trace });
     return c.json({ error: "verification_failed", reason: v.reason }, 401);
   }
   const ttl = Math.max(600, Math.ceil((d.closesAt - Date.now()) / 1000) + d.passTtlSec + 3600);
   await issueSession(c, v.anonId, d.id, ttl);
-  emit({ kind: "human", drop: d.id, note: "World ID verified" });
-  return c.json({ ok: true, anonId: v.anonId, entered: !!(await getEntry(d.id, v.anonId)) });
+  const already = !!(await getEntry(d.id, v.anonId));
+  trace.push(
+    { step: "world", detail: "proof was requested by SurgePass (one-time nonce, now consumed)", ok: true },
+    { step: "world", detail: `bound to this drop (action enter:${d.id})`, ok: true },
+    { step: "world", detail: `environment ${env}, pinned on the server`, ok: true },
+    { step: "world", detail: config.world.configured ? "verified by the World Developer Portal" : "accepted by the local simulator", ok: true },
+    { step: "identity", detail: `anonymous ID ${v.anonId.slice(0, 12)}… (one per human for this drop; no personal data)` },
+    { step: "decision", detail: already ? "allowed · session issued (this human has already entered)" : "allowed · session issued, can now enter the draw" },
+  );
+  emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 200, note: "World ID verified → allowed", trace });
+  return c.json({ ok: true, anonId: v.anonId, entered: already });
 });
+
+const WORLD_FAIL: Record<string, string> = {
+  malformed: "not a valid World ID proof",
+  unknown_nonce: "proof wasn't requested by SurgePass, or was already used (replay)",
+  action_mismatch: "proof is for a different drop",
+  signal_mismatch: "proof doesn't match the approved parameters",
+  environment_mismatch: "proof is from the wrong World ID environment",
+  rejected_by_world: "the World Developer Portal rejected the proof",
+};
 
 // ── Entries ────────────────────────────────────────────────────────────────
 api.post("/drops/:id/enter", async (c) => {
@@ -86,13 +122,33 @@ api.post("/drops/:id/enter", async (c) => {
   if (!d) return c.json({ error: "not_found" }, 404);
   const { seats = 1 } = (await c.req.json().catch(() => ({}))) as { seats?: number };
   const r = await who(c, d.id);
+  const trace: TraceStep[] = [{ step: "request", detail: `POST /_sp/api/drops/${d.id}/enter · ${seats} seat(s)` }];
   if (r.kind === "anonymous") {
     count("rejectedEntries");
-    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "no human approval → rejected" });
+    trace.push({ step: "identity", detail: "no World ID session and no agent token", ok: false }, { step: "decision", detail: "401 HumanApproval · not allowed to enter" });
+    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "no human behind it → entry rejected", trace });
     return humanApprovalRequired(c, d);
   }
+  trace.push({ step: "identity", detail: r.kind === "agent" ? `agent ${r.agent} for ${r.anonId.slice(0, 12)}… (approved by its human with World ID)` : `verified human ${r.anonId.slice(0, 12)}… (World ID session)`, ok: true });
   const out = await enter(d, { anonId: r.anonId, kind: r.kind, agentAccount: r.kind === "agent" ? r.agent : undefined, maxSeats: r.kind === "agent" ? r.seats : undefined }, Number(seats));
-  if (!out.ok) return c.json({ error: out.error }, out.error === "already_entered" ? 409 : 400);
+  if (!out.ok) {
+    const why: Record<string, string> = {
+      already_entered: "this human has already entered (one entry per human per drop)",
+      not_open: "the draw window is not open",
+      bad_seats: `seats must be 1–${r.kind === "agent" ? Math.min(r.seats, d.maxSeatsPerEntry) : d.maxSeatsPerEntry}`,
+      premium_uses_bids: "this is a premium drop: place a sealed bid instead",
+    };
+    const status = out.error === "already_entered" ? 409 : 400;
+    trace.push({ step: "entry", detail: why[out.error] ?? out.error, ok: false }, { step: "decision", detail: `${status} not allowed` });
+    emit({ kind: r.kind, method: "POST", path: c.req.path, status, drop: d.id, note: `entry rejected: ${why[out.error] ?? out.error}`, trace });
+    return c.json({ error: out.error }, status);
+  }
+  trace.push(
+    { step: "entry", detail: "first entry for this human in this drop", ok: true },
+    { step: "entry", detail: `${out.entry.seats} seat(s), within the limit of ${d.maxSeatsPerEntry}`, ok: true },
+    { step: "decision", detail: "entered · being written to the drop's Hedera topic (HCS)" },
+  );
+  emit({ kind: r.kind, method: "POST", path: c.req.path, status: 200, drop: d.id, note: `entered the draw · ${out.entry.seats} seat(s)`, trace });
   return c.json({ ok: true, entry: out.entry });
 });
 

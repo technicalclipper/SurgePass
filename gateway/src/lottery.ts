@@ -69,7 +69,7 @@ export async function enter(
       .then(async (s) => {
         const updated: Entry = { ...entry, seq: s.seq, consensusAt: s.consensusAt };
         await redis.hset(K.entries(drop.id), who.anonId, JSON.stringify(updated));
-        emit({ kind: who.kind, drop: drop.id, note: `entered · ${seats} seat(s)`, hcsSeq: s.seq, txId: s.txId });
+        emit({ kind: who.kind, drop: drop.id, note: `entry recorded on Hedera · ${seats} seat(s)`, hcsSeq: s.seq, txId: s.txId });
         broadcastPublic({ type: "entry", drop: drop.id, anonId: who.anonId, seq: s.seq, txId: s.txId });
       })
       .catch((e) => emit({ kind: "system", drop: drop.id, note: `HCS entry failed: ${String(e).slice(0, 80)}` }));

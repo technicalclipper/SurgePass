@@ -53,7 +53,7 @@ export interface LiveEvent {
 }
 
 export interface TraceStep {
-  step: "request" | "match" | "peak" | "identity" | "pass" | "quota" | "payment" | "budget" | "decision" | "upstream";
+  step: "request" | "match" | "peak" | "identity" | "world" | "entry" | "pass" | "quota" | "payment" | "budget" | "decision" | "upstream";
   detail: string;
   ok?: boolean;
 }

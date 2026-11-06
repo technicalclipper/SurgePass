@@ -20,6 +20,8 @@ export function Demo() {
   const t = last?.totals ?? {};
   // Real people and their agents: World ID verified, entered, won, booked with a pass. Pinned so a bot flood can't scroll them away.
   const people = live.people;
+  // Hedera activity: from both buffers, so a flood can't hide it.
+  const hedera = [...new Map([...live.people, ...live.events].filter((e) => e.hcsSeq || e.txId || e.kind === "draw").map((e) => [e._id ?? `${e.ts}${e.note}`, e])).values()].sort((a, b) => a.ts - b.ts);
   const price = Math.max(0, ...Object.values(last?.prices ?? {}));
   const drawMsg = [...live.other].reverse().find((m) => m.type === "draw" && m.drop === drop?.id);
   const [takeover, setTakeover] = useState<any>(null);
@@ -39,7 +41,7 @@ export function Demo() {
         </a>
         <FloodControl />
       </div>
-      <div className="grid flex-[1.1] grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <Side title="Without SurgePass" sub="QuickBook B · hit directly" b={last?.backends.direct} stats={live.stats} pick={(s) => s.backends.direct} times={times} />
         <Side title="With SurgePass" sub="QuickBook A · behind the gate" b={last?.backends.upstream} stats={live.stats} pick={(s) => s.backends.upstream} times={times} protectedSide />
       </div>
@@ -67,24 +69,30 @@ export function Demo() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_1fr_0.8fr] gap-4">
-        <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-error-700">Without SurgePass · what bots get from QuickBook B</div>
-          <LogStream events={live.events.filter((e) => e.side === "direct")} max={12} dense />
+      <div className="grid min-h-0 flex-1 grid-cols-[1fr_1.25fr_0.75fr] gap-4">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
+          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-error-700">Without SurgePass · what bots get from QuickBook B</div>
+          <div className="min-h-0 overflow-hidden">
+            <LogStream events={live.events.filter((e) => e.side === "direct")} max={10} dense />
+          </div>
         </div>
         <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
+          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
           {people.length > 0 && (
-            <div className="mb-2 rounded-xl bg-success-100/60 px-2 py-1">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-success-700">Verified people & agents · pinned</div>
-              <LogStream events={people} max={3} dense traces />
+            <div className="mb-3 rounded-xl bg-success-100/50 p-2">
+              <div className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-success-700">People & agents · World ID, entries, passes (pinned)</div>
+              <LogStream events={people} max={2} dense traces />
             </div>
           )}
-          <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace && e.kind !== "human" && e.kind !== "agent")} max={people.length ? 4 : 6} dense traces />
+          <div className="min-h-0 overflow-hidden">
+            <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace && e.kind !== "human" && e.kind !== "agent")} max={people.length ? 4 : 6} dense traces />
+          </div>
         </div>
-        <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Hedera</div>
-          <LogStream events={live.events.filter((e) => e.hcsSeq || e.txId || e.kind === "draw")} max={12} dense />
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-gray-0 p-4">
+          <div className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">Hedera</div>
+          <div className="min-h-0 overflow-hidden">
+            <LogStream events={hedera} max={8} dense />
+          </div>
         </div>
       </div>
 
@@ -120,7 +128,7 @@ export function Demo() {
 function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: string; sub: string; b?: Backend; stats: Stats[]; pick: (s: Stats) => Backend; times: number[]; protectedSide?: boolean }) {
   const failing = !b?.reachable || b.crashed || b.errorRate > 0.3;
   return (
-    <div className={`flex flex-col rounded-3xl p-5 transition-colors duration-500 ${failing ? "bg-error-100" : "bg-gray-0"}`}>
+    <div className={`flex flex-col rounded-3xl px-5 py-4 transition-colors duration-500 ${failing ? "bg-error-100" : "bg-gray-0"}`}>
       <div className="flex items-start justify-between">
         <div>
           <div className="text-2xl font-semibold tracking-[-0.01em]">{title}</div>
@@ -135,16 +143,16 @@ function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: str
           {failing ? (b?.crashed ? "● CRASHED" : "● FAILING") : "● Healthy"}
         </motion.span>
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-4">
+      <div className="mt-2 grid grid-cols-3 gap-4">
         <Metric label="errors (503)" value={`${Math.round((b?.errorRate ?? 0) * 100)}%`} bad={(b?.errorRate ?? 0) > 0.05} />
         <Metric label="p95 latency" value={`${b?.p95Ms ?? 0} ms`} bad={(b?.p95Ms ?? 0) > 800} />
         <Metric label={protectedSide ? "bookings (pass holders)" : "seats grabbed by bots"} value={String(b?.bookings ?? 0)} bad={!protectedSide && (b?.bookings ?? 0) > 0} />
       </div>
-      <div className="mt-auto pt-3">
+      <div className="mt-auto pt-1">
         <LineChart
           series={[{ name: protectedSide ? "Errors · behind SurgePass" : "Errors · direct", color: protectedSide ? "var(--series-1)" : "var(--series-2)", values: stats.map((s) => Math.round(pick(s).errorRate * 100)) }]}
           times={times}
-          height={150}
+          height={70}
           max={100}
           format={(v) => `${Math.round(v)}%`}
         />
@@ -157,16 +165,16 @@ function Metric({ label, value, bad }: { label: string; value: string; bad?: boo
   return (
     <div>
       <div className="text-xs text-gray-500">{label}</div>
-      <div className={`text-4xl font-semibold tabular tracking-[-0.02em] ${bad ? "text-error-600" : "text-gray-900"}`}>{value}</div>
+      <div className={`text-3xl font-semibold tabular tracking-[-0.02em] ${bad ? "text-error-600" : "text-gray-900"}`}>{value}</div>
     </div>
   );
 }
 
 function Big({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "warning" }) {
   return (
-    <div className="rounded-2xl bg-gray-0 px-4 py-3">
+    <div className="rounded-2xl bg-gray-0 px-4 py-2">
       <div className="truncate text-xs text-gray-500">{label}</div>
-      <div className={`text-3xl font-semibold tabular tracking-[-0.01em] ${tone === "warning" ? "text-warning-700" : ""}`}>{value}</div>
+      <div className={`text-2xl font-semibold tabular tracking-[-0.01em] ${tone === "warning" ? "text-warning-700" : ""}`}>{value}</div>
       {sub && <div className="text-xs text-gray-500">{sub}</div>}
     </div>
   );

@@ -212,7 +212,10 @@ agents.post("/approvals/:code/verify", async (c) => {
 
   if (a.kind === "link") {
     const v = await verifyProof(result, linkAction(a.agent), `budget:${a.budgetInr}`);
-    if (!v.ok) return c.json({ error: "verification_failed", reason: v.reason }, 401);
+    if (!v.ok) {
+      emit({ kind: "agent", status: 401, note: `agent link: World ID verification failed (${v.reason}) → not linked · ${a.agent}` });
+      return c.json({ error: "verification_failed", reason: v.reason }, 401);
+    }
     const link = { agent: a.agent, human: v.anonId, budgetInr: a.budgetInr, linkedAt: Date.now(), expiresAt: Date.now() + LINK_DAYS * 86_400_000 };
     await redis.set(K.link(a.agent), JSON.stringify(link), "EX", LINK_DAYS * 86_400);
     a.status = "approved";
@@ -225,7 +228,10 @@ agents.post("/approvals/:code/verify", async (c) => {
   const it = a.items.find((i) => i.drop === drop && !i.anonId);
   if (!it) return c.json({ error: "unknown_item" }, 400);
   const v = await verifyProof(result, enterAction(it.drop), signalFor(a, it));
-  if (!v.ok) return c.json({ error: "verification_failed", reason: v.reason }, 401);
+  if (!v.ok) {
+    emit({ kind: "agent", drop: it.drop, status: 401, note: `approval: World ID verification failed (${v.reason}) → agent not allowed · ${a.agent}` });
+    return c.json({ error: "verification_failed", reason: v.reason }, 401);
+  }
   it.anonId = v.anonId;
   if (a.items.every((i) => i.anonId)) a.status = "approved";
   await saveApproval(a);
