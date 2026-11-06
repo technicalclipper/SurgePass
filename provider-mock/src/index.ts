@@ -59,6 +59,16 @@ app.use("*", async (c, next) => {
 
 app.get("/", guarded((c) => c.html(homePage(catalog))));
 
+// Movie availability first: the train pattern /availability/:trainNo/:date/:class would also match it.
+app.get(
+  "/availability/movie/:movieId/:showId",
+  guarded((c) => {
+    const m = findMovie(c.req.param("movieId")!, c.req.param("showId")!);
+    if (!m) return c.json({ error: "unknown show" }, 404);
+    return c.json({ movieId: m.movieId, showId: m.showId, seats_left: inventory.get(`${m.movieId}:${m.showId}`) ?? 0, price_inr: m.priceInr });
+  }),
+);
+
 // ── Trains ─────────────────────────────────────────────────────────────────
 const findTrain = (no: string): Train | undefined => (catalog.trains as Train[]).find((t) => t.trainNo === no);
 
@@ -109,15 +119,6 @@ app.post(
 
 // ── Movies ─────────────────────────────────────────────────────────────────
 const findMovie = (id: string, show: string): Movie | undefined => (catalog.movies as Movie[]).find((m) => m.movieId === id && m.showId === show);
-
-app.get(
-  "/availability/movie/:movieId/:showId",
-  guarded((c) => {
-    const m = findMovie(c.req.param("movieId")!, c.req.param("showId")!);
-    if (!m) return c.json({ error: "unknown show" }, 404);
-    return c.json({ movieId: m.movieId, showId: m.showId, seats_left: inventory.get(`${m.movieId}:${m.showId}`) ?? 0, price_inr: m.priceInr });
-  }),
-);
 
 app.get(
   "/book/:movieId/:showId",

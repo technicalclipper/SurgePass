@@ -36,7 +36,13 @@ export interface Job {
 const untilClose = (d: Drop) => String(Math.max(60, Math.ceil((d.closesAt - Date.now()) / 1000)));
 
 const SCRIPTS = { cli: "agent/src/cli.ts", partner: "agent/src/partner.ts" };
-const AVAIL = "/availability/12007/2026-11-06/CC?quota=TQ";
+/** The drop's own availability URL (its first read route with its values), if it has one. */
+const availability = (d: Drop) => {
+  const p = d.readPatterns[0];
+  if (!p) return undefined;
+  const q = d.conditions.find((c) => c.location === "query" && c.operator === "equals");
+  return p.replace(/:(\w+)/g, (_, k: string) => d.values[k] ?? `:${k}`) + (q ? `?${q.key}=${q.value}` : "");
+};
 
 const SCENARIOS: Record<string, Scenario> = {
   "agent-normal": {
@@ -50,7 +56,7 @@ const SCENARIOS: Record<string, Scenario> = {
         { label: `Ask its human for approval · ${seats} seat(s)`, script: "cli", args: ["request", d.id, seats], approval: true },
         { label: "Wait for the human's World ID tap (open until the drop closes)", script: "cli", args: ["wait", untilClose(d)] },
         { label: `Enter the draw for ${seats} seat(s)`, script: "cli", args: ["enter", d.id, seats], expect: /"ok": true/ },
-        ...(/12007/.test(d.label) ? [{ label: "Check availability (x402 beyond the free quota)", script: "cli" as const, args: ["check", d.id, AVAIL] }] : []),
+        ...(availability(d) ? [{ label: "Check availability (x402 beyond the free quota)", script: "cli" as const, args: ["check", d.id, availability(d)!] }] : []),
       ];
     },
   },

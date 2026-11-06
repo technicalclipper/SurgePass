@@ -20,6 +20,7 @@
     "dev:dashboard": "npm run dev -w dashboard",
     "dev": "concurrently -n provA,provB,gateway,room,console,agent -c gray,gray,blue,green,magenta,cyan \"PROVIDER_PORT=4000 PROVIDER_NAME=A npm run dev:provider\" \"PROVIDER_PORT=4001 PROVIDER_NAME=B npm run dev:provider\" \"npm run dev:gateway\" \"npm run dev:waiting-room\" \"npm run dev:dashboard\" \"npm run dev:agent\"",
     "seed": "tsx scripts/seed-drops.ts",
+    "seed:catalog": "tsx scripts/seed-catalog.ts",
     "reset": "tsx scripts/reset.ts",
     "test": "tsx --test packages/shared/test/*.test.ts gateway/test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json",

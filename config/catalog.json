@@ -9,7 +9,12 @@
       "class": "CC",
       "departs": "06:40",
       "fareInr": 1000,
-      "seats": { "TQ": 60, "PT": 12, "AG": 20, "GN": 200 }
+      "seats": {
+        "TQ": 60,
+        "PT": 12,
+        "AG": 20,
+        "GN": 200
+      }
     },
     {
       "trainNo": "12951",
@@ -20,7 +25,76 @@
       "class": "3A",
       "departs": "17:00",
       "fareInr": 2800,
-      "seats": { "TQ": 40, "PT": 10, "AG": 10, "GN": 300 }
+      "seats": {
+        "TQ": 40,
+        "PT": 10,
+        "AG": 10,
+        "GN": 300
+      }
+    },
+    {
+      "trainNo": "12123",
+      "name": "Deccan Queen",
+      "from": "Mumbai CSMT",
+      "to": "Pune Jn",
+      "date": "2026-11-07",
+      "class": "CC",
+      "departs": "17:10",
+      "fareInr": 900,
+      "seats": {
+        "TQ": 60,
+        "PT": 12,
+        "AG": 20,
+        "GN": 200
+      }
+    },
+    {
+      "trainNo": "12009",
+      "name": "Shatabdi Express",
+      "from": "Mumbai Central",
+      "to": "Ahmedabad Jn",
+      "date": "2026-11-07",
+      "class": "CC",
+      "departs": "06:20",
+      "fareInr": 1500,
+      "seats": {
+        "TQ": 50,
+        "PT": 12,
+        "AG": 16,
+        "GN": 250
+      }
+    },
+    {
+      "trainNo": "22691",
+      "name": "Rajdhani Express",
+      "from": "KSR Bengaluru",
+      "to": "Hazrat Nizamuddin",
+      "date": "2026-11-07",
+      "class": "3A",
+      "departs": "20:00",
+      "fareInr": 4200,
+      "seats": {
+        "TQ": 40,
+        "PT": 10,
+        "AG": 12,
+        "GN": 300
+      }
+    },
+    {
+      "trainNo": "12627",
+      "name": "Karnataka Express",
+      "from": "KSR Bengaluru",
+      "to": "New Delhi",
+      "date": "2026-11-07",
+      "class": "SL",
+      "departs": "19:20",
+      "fareInr": 950,
+      "seats": {
+        "TQ": 80,
+        "PT": 16,
+        "AG": 20,
+        "GN": 500
+      }
     }
   ],
   "movies": [
@@ -41,6 +115,42 @@
       "time": "12:00",
       "priceInr": 300,
       "seats": 250
+    },
+    {
+      "movieId": "c",
+      "title": "Neon Tide",
+      "showId": "bandra-1030",
+      "theatre": "Bandra Talkies · Screen 1",
+      "time": "10:30",
+      "priceInr": 400,
+      "seats": 300
+    },
+    {
+      "movieId": "d",
+      "title": "The Last Monsoon",
+      "showId": "parel-1315",
+      "theatre": "Lower Parel Cinemas · Audi 4",
+      "time": "13:15",
+      "priceInr": 380,
+      "seats": 260
+    },
+    {
+      "movieId": "e",
+      "title": "Paper Kites",
+      "showId": "juhu-1800",
+      "theatre": "Juhu Screens · Audi 3",
+      "time": "18:00",
+      "priceInr": 350,
+      "seats": 220
+    },
+    {
+      "movieId": "f",
+      "title": "Midnight Line",
+      "showId": "thane-2145",
+      "theatre": "Thane Picture House · Screen 2",
+      "time": "21:45",
+      "priceInr": 320,
+      "seats": 240
     }
   ],
   "events": [
