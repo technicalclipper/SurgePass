@@ -32,6 +32,7 @@ export async function forward(
 
   // Never let a client supply its own assertion.
   headers.delete(ASSERTION_HEADER);
+  headers.delete("x-surgepass-pass");
   if (opts.assertion) headers.set(ASSERTION_HEADER, opts.assertion);
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));

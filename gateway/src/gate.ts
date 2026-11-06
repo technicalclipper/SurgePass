@@ -5,6 +5,8 @@ import { isPeak } from "./mode.ts";
 import { count, emit } from "./live.ts";
 import { forward } from "./proxy.ts";
 import { roomUrl } from "./room.ts";
+import { assertionFor, checkPass, onFinalStep } from "./passes.ts";
+import { who } from "./identity.ts";
 
 // The gate: every provider request comes through here. Cheapest checks first.
 
@@ -37,9 +39,21 @@ export async function gate(c: Context): Promise<Response> {
     return forward(req, { body });
   }
 
-  // Booking route at peak without a pass → the waiting room.
+  // Booking route at peak: only pass holders get through.
+  const pass = await checkPass(c, m.drop);
+  if (pass.ok) {
+    count("forwarded");
+    const r = await who(c, m.drop.id);
+    emit({ kind: r.kind === "agent" ? "agent" : "human", method: req.method, path: url.pathname, status: 200, drop: m.drop.id, note: `pass ✓ ${pass.rec.seats} seat(s) → provider` });
+    const res = await forward(req, { body, assertion: await assertionFor(pass.rec) });
+    return m.kind === "final" ? onFinalStep(m.drop, pass.rec, res) : res;
+  }
+
   count("waitingRoom");
-  emit({ kind: "bot", method: req.method, path: url.pathname, status: 302, drop: m.drop.id, note: "no pass → waiting room" });
+  emit({ kind: "bot", method: req.method, path: url.pathname, status: 302, drop: m.drop.id, note: pass.reason === "missing" ? "no pass → waiting room" : `pass ${pass.reason} → waiting room` });
+  if (req.method !== "GET" || c.req.header("accept")?.includes("application/json")) {
+    return c.json({ error: "pass_required", reason: pass.reason, waitingRoom: roomUrl(m.drop.id) }, 403);
+  }
   return c.redirect(roomUrl(m.drop.id, url.pathname + url.search), 302);
 }
 

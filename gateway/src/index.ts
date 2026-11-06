@@ -10,7 +10,8 @@ import { health, isPeak, startModeController } from "./mode.ts";
 import { serveRoom } from "./room.ts";
 import { api } from "./api.ts";
 import { jwks } from "./keys.ts";
-import { startLifecycle } from "./lottery.ts";
+import { setWinnersHandler, startLifecycle } from "./lottery.ts";
+import { issuePass, startPassExpiry } from "./passes.ts";
 
 const app = new Hono();
 
@@ -28,6 +29,10 @@ setStatsSource(() => ({ backends: health, drops: drops.all().map((d) => ({ id: d
 await watchDrops();
 startModeController();
 startLifecycle();
+startPassExpiry();
+setWinnersHandler(async (drop, winners) => {
+  for (const w of winners) await issuePass(drop, w);
+});
 
 const server = serve({ fetch: app.fetch, port: config.port }) as Server;
 attachLive(server);

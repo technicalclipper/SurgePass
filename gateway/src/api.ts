@@ -8,7 +8,9 @@ import { isPeak } from "./mode.ts";
 import { allow } from "./ratelimit.ts";
 import { enterAction, issueRpContext, verifyProof } from "./world.ts";
 import { topicLink } from "./hedera.ts";
-import { personalStatus } from "./status.ts";
+import { addStatusExtra, personalStatus } from "./status.ts";
+import { bookingLink, claimIntoCookie, passFor, passToken, releasedCount } from "./passes.ts";
+import { config } from "./config.ts";
 import { envNum } from "@surgepass/shared/env";
 
 const CTX_PER_MIN = envNum("WORLD_CONTEXT_PER_MIN", 30);
@@ -118,4 +120,39 @@ api.get("/drops/:id/entries", async (c) => {
   if (!d) return c.json({ error: "not_found" }, 404);
   const entries = await allEntries(d.id);
   return c.json({ entries: entries.map((e) => ({ anonId: e.anonId, seats: e.seats, seq: e.seq, kind: e.kind })), result: await getResult(d.id) });
+});
+
+// ── Passes ─────────────────────────────────────────────────────────────────
+addStatusExtra(async (d, anonId) => {
+  const rec = await passFor(d.id, anonId);
+  const released = await releasedCount(d.id);
+  if (!rec) return { released };
+  return {
+    released,
+    pass: { seats: rec.seats, requested: rec.requested, price: rec.price, status: rec.status, expiresAt: rec.expiresAt, booked: rec.booked },
+    outcome: { result: rec.status === "used" ? "booked" : rec.status === "expired" ? "expired" : "won", seats: rec.seats, requested: rec.requested, partial: rec.seats < rec.requested, price: rec.price },
+  };
+});
+
+/** Winner (browser) → sets the pass cookie on this domain → the provider's normal booking page. */
+api.get("/drops/:id/claim", async (c) => {
+  const d = drops.get(c.req.param("id"));
+  if (!d) return c.json({ error: "not_found" }, 404);
+  const r = await who(c, d.id);
+  if (r.kind === "anonymous") return c.redirect(`/_sp/room/${d.id}`);
+  const rec = await passFor(d.id, r.anonId);
+  if (!rec || rec.status !== "issued" || Date.now() > rec.expiresAt) return c.redirect(`/_sp/room/${d.id}`);
+  await claimIntoCookie(c, rec);
+  return c.redirect(bookingLink(d));
+});
+
+/** Agents fetch their pass token and booking URL; they send it as X-SurgePass-Pass. */
+api.get("/drops/:id/pass", async (c) => {
+  const d = drops.get(c.req.param("id"));
+  if (!d) return c.json({ error: "not_found" }, 404);
+  const r = await who(c, d.id);
+  if (r.kind === "anonymous") return c.json({ error: "unauthorized" }, 401);
+  const rec = await passFor(d.id, r.anonId);
+  if (!rec || rec.status !== "issued") return c.json({ error: "no_active_pass", status: rec?.status ?? null }, 404);
+  return c.json({ pass: await passToken(rec), header: "X-SurgePass-Pass", seats: rec.seats, expiresAt: rec.expiresAt, bookingUrl: new URL(bookingLink(d), config.origin).toString() });
 });

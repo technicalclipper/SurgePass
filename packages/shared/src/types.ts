@@ -112,6 +112,7 @@ export interface DrawResult {
 }
 
 export interface PassClaims {
+  [key: string]: unknown;
   drop: string;
   sub: string;
   pool: Pool;
