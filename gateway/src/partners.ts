@@ -194,7 +194,7 @@ partnerApi.get("/drops/:id/availability", async (c) => {
   addRevenue(out.amountInr);
   await stat(p.account, "looks");
   await stat(p.account, "lookFeesInr", out.amountInr);
-  emit({ kind: "agent", drop: d.id, note: `${p.name} looked · paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId });
+  emit({ kind: "agent", drop: d.id, note: `${p.name} looked · paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId, outcome: { actor: "partner", ok: true, who: p.name, action: `paid look at availability · ₹${out.amountInr.toFixed(2)} via x402` } });
   c.header("PAYMENT-RESPONSE", out.responseHeader);
   return c.json({
     seatsLeft: await seatsLeft(d),

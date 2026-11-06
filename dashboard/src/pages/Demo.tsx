@@ -7,6 +7,7 @@ import { inr, LogStream } from "../ui/console";
 import { FloodControl } from "../ui/flood";
 import { LogPanel } from "../ui/logpanel";
 import { Rolling } from "../ui/rolling";
+import { FloodViz, ShieldIcon } from "../ui/floodviz";
 
 // Projector view: same flood, two identical sites. Left is hit directly, right is behind SurgePass.
 
@@ -27,9 +28,13 @@ export function Demo() {
   // Hedera activity: from both buffers, so a flood can't hide it.
   const hedera = [...new Map([...live.people, ...live.events].filter((e) => e.hcsSeq || e.txId || e.kind === "draw").map((e) => [e._id ?? `${e.ts}${e.note}`, e])).values()].sort((a, b) => a.ts - b.ts);
   const price = Math.max(0, ...Object.values(last?.prices ?? {}));
+  const [gateView, setGateView] = useState(false);
+  const p = last?.perSecond ?? {};
+  const stopping = (p.waitingRoom ?? 0) + (p.challenged402 ?? 0) + (p.blocked ?? 0) + (p.rejectedEntries ?? 0);
 
   return (
     <div className="flex h-screen flex-col gap-4 bg-gray-50 p-5">
+      <FloodViz open={gateView} onClose={() => setGateView(false)} />
       <div className="flex items-center justify-between gap-4">
         <a href="#overview" className="text-sm font-semibold text-gray-500 hover:text-gray-900">
           ← SurgePass console
@@ -38,7 +43,16 @@ export function Demo() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <Side title="Without SurgePass" sub="QuickBook B · hit directly" b={last?.backends.direct} stats={live.stats} pick={(s) => s.backends.direct} times={times} />
-        <Side title="With SurgePass" sub="QuickBook A · behind the gate" b={last?.backends.upstream} stats={live.stats} pick={(s) => s.backends.upstream} times={times} protectedSide />
+        <Side
+          title="With SurgePass"
+          sub="QuickBook A · behind the gate"
+          b={last?.backends.upstream}
+          stats={live.stats}
+          pick={(s) => s.backends.upstream}
+          times={times}
+          protectedSide
+          shield={live.flood?.running || gateView ? { perSec: stopping, onClick: () => setGateView(true) } : undefined}
+        />
       </div>
 
       <div className="grid grid-cols-6 gap-4">
@@ -87,7 +101,25 @@ export function Demo() {
   );
 }
 
-function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: string; sub: string; b?: Backend; stats: Stats[]; pick: (s: Stats) => Backend; times: number[]; protectedSide?: boolean }) {
+function Side({
+  title,
+  sub,
+  b,
+  stats,
+  pick,
+  times,
+  protectedSide,
+  shield,
+}: {
+  title: string;
+  sub: string;
+  b?: Backend;
+  stats: Stats[];
+  pick: (s: Stats) => Backend;
+  times: number[];
+  protectedSide?: boolean;
+  shield?: { perSec: number; onClick: () => void };
+}) {
   const failing = !b?.reachable || b.crashed || b.errorRate > 0.3;
   return (
     <div className={`flex flex-col rounded-3xl px-5 py-4 transition-colors duration-500 ${failing ? "bg-error-100" : "bg-gray-0"}`}>
@@ -96,14 +128,36 @@ function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: str
           <div className="text-2xl font-semibold tracking-[-0.01em]">{title}</div>
           <div className="text-sm text-gray-500">{sub}</div>
         </div>
-        <motion.span
-          key={String(failing)}
-          initial={{ scale: 0.8 }}
-          animate={{ scale: 1 }}
-          className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold ${failing ? "bg-error-600 text-gray-0" : "bg-success-100 text-success-700"}`}
-        >
-          {failing ? (b?.crashed ? "● CRASHED" : "● FAILING") : "● Healthy"}
-        </motion.span>
+        <div className="flex items-center gap-2">
+          {shield && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={shield.onClick}
+              title="Watch the gate"
+              className="group relative inline-flex h-9 items-center gap-2 rounded-full bg-gray-900 pl-3 pr-4 text-sm font-semibold text-gray-0 transition hover:bg-gray-700"
+            >
+              <motion.span
+                className="absolute inset-0 rounded-full"
+                animate={{ boxShadow: ["0 0 0 0 rgba(24,24,24,0.35)", "0 0 0 10px rgba(24,24,24,0)"] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+              />
+              <ShieldIcon className="relative" />
+              <span className="relative tabular">
+                Blocking <Rolling value={shield.perSec.toLocaleString("en-IN")} />
+                /s
+              </span>
+            </motion.button>
+          )}
+          <motion.span
+            key={String(failing)}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold ${failing ? "bg-error-600 text-gray-0" : "bg-success-100 text-success-700"}`}
+          >
+            {failing ? (b?.crashed ? "● CRASHED" : "● FAILING") : "● Healthy"}
+          </motion.span>
+        </div>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-4">
         <Metric label="errors (503)" value={`${Math.round((b?.errorRate ?? 0) * 100)}%`} bad={(b?.errorRate ?? 0) > 0.05} />
