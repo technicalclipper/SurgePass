@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { Drop, TraceStep } from "@surgepass/shared";
 import { drops } from "./drops.ts";
-import { issueSession, who } from "./identity.ts";
+import { issueSession, who, whoLabel } from "./identity.ts";
 import { count, emit } from "./live.ts";
 import { allEntries, enter, entryCount, getEntry, getResult, verifyBundle } from "./lottery.ts";
 import { isPeak } from "./mode.ts";
@@ -71,7 +71,7 @@ api.post("/world/verify", async (c) => {
   const trace: TraceStep[] = [{ step: "request", detail: `POST /_sp/api/world/verify · ${d.label}` }];
   if (!(await allow(`verify:${clientIp(c)}`, VERIFY_PER_MIN, 60))) {
     trace.push({ step: "world", detail: `too many verification attempts from this address (limit ${VERIFY_PER_MIN}/min)`, ok: false }, { step: "decision", detail: "429 not allowed · no session" });
-    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 429, note: "World ID: rate limited → not allowed", trace });
+    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 429, note: "World ID: rate limited → not allowed", trace, outcome: { actor: "person", ok: false, who: "unverified", action: "World ID · rate limited" } });
     return c.json({ error: "rate_limited" }, 429);
   }
   const v = await verifyProof(result, enterAction(d.id));
@@ -89,7 +89,7 @@ api.post("/world/verify", async (c) => {
     checks.slice(0, failAt).forEach((detail) => trace.push({ step: "world", detail, ok: true }));
     trace.push({ step: "world", detail: `${WORLD_FAIL[v.reason] ?? v.reason}${v.detail ? ` (${v.detail})` : ""}`, ok: false });
     trace.push({ step: "decision", detail: "401 not allowed · no session, cannot enter the draw" });
-    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 401, note: `World ID verification failed: ${WORLD_FAIL[v.reason] ?? v.reason}${v.detail ? ` (${v.detail})` : ""} → not allowed`, trace });
+    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 401, note: `World ID verification failed: ${WORLD_FAIL[v.reason] ?? v.reason}${v.detail ? ` (${v.detail})` : ""} → not allowed`, trace, outcome: { actor: "person", ok: false, who: "unverified", action: `World ID refused · ${WORLD_FAIL[v.reason] ?? v.reason}` } });
     return c.json({ error: "verification_failed", reason: v.reason }, 401);
   }
   const ttl = Math.max(600, Math.ceil((d.closesAt - Date.now()) / 1000) + d.passTtlSec + 3600);
@@ -103,7 +103,7 @@ api.post("/world/verify", async (c) => {
     { step: "identity", detail: `anonymous ID ${v.anonId.slice(0, 12)}… (one per human for this drop; no personal data)` },
     { step: "decision", detail: already ? "allowed · session issued (this human has already entered)" : "allowed · session issued, can now enter the draw" },
   );
-  emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 200, note: "World ID verified → allowed", trace });
+  emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 200, note: "World ID verified → allowed", trace, outcome: { actor: "person", ok: true, who: `human ${v.anonId.slice(0, 8)}`, action: "World ID verified" } });
   return c.json({ ok: true, anonId: v.anonId, entered: already });
 });
 
@@ -126,7 +126,7 @@ api.post("/drops/:id/enter", async (c) => {
   if (r.kind === "anonymous") {
     count("rejectedEntries");
     trace.push({ step: "identity", detail: "no World ID session and no agent token", ok: false }, { step: "decision", detail: "401 HumanApproval · not allowed to enter" });
-    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "no human behind it → entry rejected", trace });
+    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "no human behind it → entry rejected", trace, outcome: { actor: "agent", ok: false, who: "no human behind it", action: "enter draw · 401 HumanApproval" } });
     return humanApprovalRequired(c, d);
   }
   trace.push({ step: "identity", detail: r.kind === "agent" ? `agent ${r.agent} for ${r.anonId.slice(0, 12)}… (approved by its human with World ID)` : `verified human ${r.anonId.slice(0, 12)}… (World ID session)`, ok: true });
@@ -140,7 +140,7 @@ api.post("/drops/:id/enter", async (c) => {
     };
     const status = out.error === "already_entered" ? 409 : 400;
     trace.push({ step: "entry", detail: why[out.error] ?? out.error, ok: false }, { step: "decision", detail: `${status} not allowed` });
-    emit({ kind: r.kind, method: "POST", path: c.req.path, status, drop: d.id, note: `entry rejected: ${why[out.error] ?? out.error}`, trace });
+    emit({ kind: r.kind, method: "POST", path: c.req.path, status, drop: d.id, note: `entry rejected: ${why[out.error] ?? out.error}`, trace, outcome: { actor: r.kind === "agent" ? "agent" : "person", ok: false, who: whoLabel(r), action: `enter draw · ${why[out.error] ?? out.error}` } });
     return c.json({ error: out.error }, status);
   }
   trace.push(
@@ -148,7 +148,7 @@ api.post("/drops/:id/enter", async (c) => {
     { step: "entry", detail: `${out.entry.seats} seat(s), within the limit of ${d.maxSeatsPerEntry}`, ok: true },
     { step: "decision", detail: "entered · being written to the drop's Hedera topic (HCS)" },
   );
-  emit({ kind: r.kind, method: "POST", path: c.req.path, status: 200, drop: d.id, note: `entered the draw · ${out.entry.seats} seat(s)`, trace });
+  emit({ kind: r.kind, method: "POST", path: c.req.path, status: 200, drop: d.id, note: `entered the draw · ${out.entry.seats} seat(s)`, trace, outcome: { actor: r.kind === "agent" ? "agent" : "person", ok: true, who: whoLabel(r), action: `entered the draw · ${out.entry.seats} seat(s)` } });
   return c.json({ ok: true, entry: out.entry });
 });
 

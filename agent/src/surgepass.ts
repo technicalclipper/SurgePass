@@ -67,6 +67,7 @@ export async function requestDrops(items: { id: string; seats: number; maxBid?: 
   const r = await call("/_sp/api/approvals", { method: "POST", body: JSON.stringify({ agent_account: ACCOUNT, drops: items }) });
   const b = await json(r);
   if (r.status !== 401) return { error: b.error ?? `unexpected ${r.status}`, details: b };
+  state.pending = state.pending.filter((p) => Date.now() - p.createdAt < 300_000); // approvals expire after 5 min
   state.pending.push({ userCode: b.user_code, deviceCode: b.device_code, approvalUrl: b.approval_url, drops: items.map((i) => i.id), kind: "drop", createdAt: Date.now() });
   persist();
   return { approval_url: b.approval_url, user_code: b.user_code, expires_in: b.expires_in, label: b.label };

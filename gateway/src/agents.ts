@@ -229,13 +229,13 @@ agents.post("/approvals/:code/verify", async (c) => {
   if (!it) return c.json({ error: "unknown_item" }, 400);
   const v = await verifyProof(result, enterAction(it.drop), signalFor(a, it));
   if (!v.ok) {
-    emit({ kind: "agent", drop: it.drop, status: 401, note: `approval: World ID verification failed (${v.reason}) → agent not allowed · ${a.agent}` });
+    emit({ kind: "agent", drop: it.drop, status: 401, note: `approval: World ID verification failed (${v.reason}) → agent not allowed · ${a.agent}`, outcome: { actor: "agent", ok: false, who: `agent ${a.agent}`, action: `approval refused · World ID ${v.reason}` } });
     return c.json({ error: "verification_failed", reason: v.reason }, 401);
   }
   it.anonId = v.anonId;
   if (a.items.every((i) => i.anonId)) a.status = "approved";
   await saveApproval(a);
-  emit({ kind: "agent", drop: it.drop, note: `approved by human · ${a.agent} · ${it.seats} seat(s)${it.maxBid ? ` · max ₹${it.maxBid}` : ""}` });
+  emit({ kind: "agent", drop: it.drop, note: `approved by human · ${a.agent} · ${it.seats} seat(s)${it.maxBid ? ` · max ₹${it.maxBid}` : ""}`, outcome: { actor: "agent", ok: true, who: `agent ${a.agent}`, action: `approved by its human (World ID) · ${it.seats} seat(s)${it.maxBid ? ` · max ₹${it.maxBid}` : ""}` } });
   return c.json({ ok: true, status: a.status });
 });
 
@@ -244,7 +244,7 @@ agents.post("/approvals/:code/decline", async (c) => {
   if (!a || a.status !== "pending") return c.json({ error: "not_pending" }, 400);
   a.status = "declined";
   await saveApproval(a);
-  emit({ kind: "agent", note: `approval declined · ${a.agent}`, drop: a.items[0]?.drop });
+  emit({ kind: "agent", note: `approval declined · ${a.agent}`, drop: a.items[0]?.drop, outcome: { actor: "agent", ok: false, who: `agent ${a.agent}`, action: "approval declined by its human" } });
   return c.json({ ok: true, status: a.status });
 });
 

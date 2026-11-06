@@ -60,3 +60,6 @@ export async function issueSession(c: Context, anonId: string, dropId: string, t
   );
   return token;
 }
+
+/** Short label for the Compare page: the agent's account, or the human's anonymous ID. */
+export const whoLabel = (r: { kind: string; anonId?: string; agent?: string }) => (r.kind === "agent" ? `agent ${r.agent}` : `human ${r.anonId?.slice(0, 8)}`);

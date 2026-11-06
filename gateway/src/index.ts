@@ -23,11 +23,13 @@ import { onBooked } from "./passes.ts";
 import { fcfs } from "./fcfs.ts";
 import { partnerApi, registerPartnerAdmin, startPartnerQueue } from "./partners.ts";
 import { registerFloodAdmin } from "./floodctl.ts";
+import { registerJobsAdmin } from "./jobs.ts";
 
 const app = new Hono();
 
 registerPartnerAdmin(admin);
 registerFloodAdmin(admin);
+registerJobsAdmin(admin);
 app.route("/_sp/admin", admin);
 app.route("/_sp/api", agents);
 app.route("/_sp/api", premium);

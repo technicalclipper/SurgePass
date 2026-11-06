@@ -50,6 +50,7 @@ export interface LiveEvent {
   _id?: number;
   trace?: TraceStep[];
   us?: number;
+  outcome?: { actor: "person" | "agent" | "partner"; ok: boolean; who: string; action: string };
 }
 
 export interface TraceStep {

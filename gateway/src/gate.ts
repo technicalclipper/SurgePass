@@ -160,7 +160,7 @@ async function readRoute(c: Context, drop: Drop, url: URL, t: Trace, body?: Arra
   if (pay) {
     if (r.kind === "agent" && !(await withinBudget(r.agent, price))) {
       t.add("budget", `agent ${r.agent} has reached its human's budget`, false).add("decision", "402 budget_exceeded").decided();
-      emit({ kind: "agent", method: req.method, path: url.pathname, status: 402, drop: drop.id, note: `budget reached · ${r.agent}`, trace: t.steps, us: t.us });
+      emit({ kind: "agent", method: req.method, path: url.pathname, status: 402, drop: drop.id, note: `budget reached · ${r.agent}`, trace: t.steps, us: t.us, outcome: { actor: "agent", ok: false, who: `agent ${r.agent}`, action: "paid read · budget reached" } });
       return new Response(JSON.stringify({ error: "budget_exceeded" }), { status: 402, headers: { "content-type": "application/json" } });
     }
     const out = await settle(pay, price);
@@ -178,7 +178,7 @@ async function readRoute(c: Context, drop: Drop, url: URL, t: Trace, body?: Arra
     const started = Date.now();
     const res = await forward(req, { body });
     t.add("upstream", `${res.status} from the provider in ${Date.now() - started} ms`, res.status < 500);
-    emit({ kind: kindOf(r), method: req.method, path: url.pathname, status: res.status, drop: drop.id, note: `paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId, trace: t.steps, us: t.us });
+    emit({ kind: kindOf(r), method: req.method, path: url.pathname, status: res.status, drop: drop.id, note: `paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId, trace: t.steps, us: t.us, outcome: r.kind === "agent" ? { actor: "agent", ok: true, who: `agent ${r.agent}`, action: `paid read · ₹${out.amountInr.toFixed(2)} via x402` } : undefined });
     const h = new Headers(res.headers);
     h.set("PAYMENT-RESPONSE", out.responseHeader);
     return new Response(res.body, { status: res.status, headers: h });

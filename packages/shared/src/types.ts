@@ -186,6 +186,15 @@ export interface LiveEvent {
   trace?: TraceStep[];
   /** Time the gate itself spent deciding, in microseconds (excludes the provider's response time). */
   us?: number;
+  /** Set on the decisions the Compare page lists: who tried what, and whether they got through. */
+  outcome?: Outcome;
+}
+
+export interface Outcome {
+  actor: "person" | "agent" | "partner";
+  ok: boolean;
+  who: string;
+  action: string;
 }
 
 export interface TraceStep {

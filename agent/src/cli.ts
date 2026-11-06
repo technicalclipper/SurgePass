@@ -69,7 +69,9 @@ switch (cmd) {
   case "rogue": {
     // A script with no human behind it tries to enter: always rejected, even if it pays.
     const d = await drop(a!);
-    const r = await fetch(new URL(`/_sp/api/drops/${d.id}/enter`, sp.GATEWAY), { method: "POST", headers: { "content-type": "application/json" }, body: '{"seats":1}' });
+    const path = d.pool === "premium" ? `/_sp/api/drops/${d.id}/bid/commit` : `/_sp/api/drops/${d.id}/enter`;
+    const body = d.pool === "premium" ? JSON.stringify({ commit_hash: "0".repeat(64), seats: 1 }) : '{"seats":1}';
+    const r = await fetch(new URL(path, sp.GATEWAY), { method: "POST", headers: { "content-type": "application/json" }, body });
     console.log(r.status, r.headers.get("www-authenticate"), (await r.json()).error);
     break;
   }

@@ -3,7 +3,7 @@ import { bidCommitment, clearPremium, winnersHash, type Drop, type DrawResult } 
 import { drops, setStatus } from "./drops.ts";
 import { enqueue, drain } from "./hcsqueue.ts";
 import { hederaLive, newSeedTxId, prngSeed, scheduleRefund } from "./hedera.ts";
-import { who } from "./identity.ts";
+import { who, whoLabel } from "./identity.ts";
 import { broadcastPublic, emit } from "./live.ts";
 import { getJson, redis, setJson } from "./redis.ts";
 import { issuePass } from "./passes.ts";
@@ -59,14 +59,17 @@ premium.post("/drops/:id/bid/commit", async (c) => {
   if (d.status !== "open" || Date.now() > d.closesAt) return c.json({ error: "not_open" }, 400);
   const r = await who(c, d.id);
   if (r.kind === "anonymous") {
-    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "bid without human → rejected" });
+    emit({ kind: "bot", method: "POST", path: c.req.path, status: 401, drop: d.id, note: "bid without human → rejected", outcome: { actor: "agent", ok: false, who: "no human behind it", action: "sealed bid · 401 HumanApproval" } });
     return c.json({ error: "human_approval_required" }, 401);
   }
   const { commit_hash, seats = 1 } = (await c.req.json().catch(() => ({}))) as { commit_hash?: string; seats?: number };
   if (!commit_hash || !/^[0-9a-f]{64}$/.test(commit_hash)) return c.json({ error: "commit_hash must be sha256 hex" }, 400);
   const cap = Math.min(d.maxSeatsPerEntry, r.kind === "agent" ? r.seats : d.maxSeatsPerEntry);
   if (!Number.isInteger(seats) || seats < 1 || seats > cap) return c.json({ error: "bad_seats" }, 400);
-  if (await getBid(d.id, r.anonId)) return c.json({ error: "already_bid" }, 409);
+  if (await getBid(d.id, r.anonId)) {
+    emit({ kind: r.kind, drop: d.id, status: 409, note: "bid rejected: already bid", outcome: { actor: r.kind === "agent" ? "agent" : "person", ok: false, who: whoLabel(r), action: "sealed bid · one bid per human" } });
+    return c.json({ error: "already_bid" }, 409);
+  }
 
   // Agents pay the fixed deposit through x402; the same amount for everyone, so it reveals nothing.
   let deposit: Bid["deposit"];
@@ -88,7 +91,7 @@ premium.post("/drops/:id/bid/commit", async (c) => {
       .then(async (s) => {
         const cur = await getBid(d.id, r.anonId);
         if (cur) await putBid(d.id, { ...cur, seq: s.seq });
-        emit({ kind: r.kind, drop: d.id, note: `bid sealed · ${seats} seat(s)`, hcsSeq: s.seq, txId: s.txId });
+        emit({ kind: r.kind, drop: d.id, note: `bid sealed · ${seats} seat(s)`, hcsSeq: s.seq, txId: s.txId, outcome: { actor: r.kind === "agent" ? "agent" : "person", ok: true, who: whoLabel(r), action: `sealed bid · ${seats} seat(s)${deposit ? ` · deposit ₹${deposit.amountInr} via x402` : ""}` } });
         broadcastPublic({ type: "bid_sealed", drop: d.id, anonId: r.anonId, seq: s.seq, txId: s.txId });
       })
       .catch(() => {});

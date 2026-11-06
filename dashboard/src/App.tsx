@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { admin, GATEWAY, getToken, setToken } from "./lib/api";
 import { useLive } from "./lib/live";
+import { Compare } from "./pages/Compare";
 import { DropsPage } from "./pages/Drops";
 import { Demo } from "./pages/Demo";
 import { Proofs, Routes, Traffic } from "./pages/Other";
@@ -13,6 +14,7 @@ import { Btn, inputCls } from "./ui/console";
 
 const NAV = [
   { id: "overview", label: "Overview" },
+  { id: "compare", label: "Compare" },
   { id: "routes", label: "Routes" },
   { id: "normal", label: "Drops · Normal" },
   { id: "premium", label: "Drops · Premium" },
@@ -119,6 +121,7 @@ function Shell() {
       <main className="min-w-0 flex-1 p-8">
         <div className="mx-auto max-w-7xl">
           {page === "overview" && <Overview />}
+          {page === "compare" && <Compare />}
           {page === "routes" && <Routes />}
           {page === "normal" && <DropsPage key="normal" pool="normal" />}
           {page === "premium" && <DropsPage key="premium" pool="premium" />}

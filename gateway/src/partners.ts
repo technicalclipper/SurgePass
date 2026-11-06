@@ -107,7 +107,7 @@ async function requirePartner(c: Context<Env>, next: Next) {
   if (!account || !ts || !sig) return c.json({ error: "partner_signature_required" }, 401);
   const p = await getPartner(account);
   if (!p) {
-    emit({ kind: "bot", method: c.req.method, path: c.req.path, status: 403, note: `not an allowlisted partner · ${account}` });
+    emit({ kind: "bot", method: c.req.method, path: c.req.path, status: 403, note: `not an allowlisted partner · ${account}`, outcome: { actor: "partner", ok: false, who: account, action: `${c.req.path.endsWith("/hold") ? "hold seats" : c.req.path.endsWith("/availability") ? "look at availability" : c.req.path.endsWith("/drops") ? "list partner drops" : "partner API"} · 403 not allowlisted` } });
     return c.json({ error: "not_allowlisted" }, 403);
   }
   if (Math.abs(Date.now() - Number(ts)) > 60_000) return c.json({ error: "stale_signature" }, 401);
@@ -174,7 +174,7 @@ partnerApi.post("/drops/:id/join", async (c) => {
     const r = await grantKyc(d.partner!.tokenId!, p.account);
     await redis.sadd(K.allowed(d.id), p.account);
     void log(d, { t: "partner_allowed", drop: d.id, partner: p.account, token: d.partner!.tokenId! }).catch(() => {});
-    emit({ kind: "agent", drop: d.id, note: `${p.name} allowlisted on seat token (KYC)`, txId: r.txId });
+    emit({ kind: "agent", drop: d.id, note: `${p.name} allowlisted on seat token (KYC)`, txId: r.txId, outcome: { actor: "partner", ok: true, who: p.name, action: "KYC granted on the seat token" } });
     return c.json({ ok: true, tokenId: d.partner!.tokenId, kycTx: r.txId, link: r.link });
   } catch (e) {
     return c.json({ error: e instanceof HtsError ? e.code : "kyc_failed", message: String((e as Error).message) }, 400);
@@ -255,7 +255,7 @@ partnerApi.post("/drops/:id/hold", async (c) => {
   hold.seq = s.seq;
   await putHold(hold);
   await redis.hset(K.queue(d.id), hold.id, hold.consensusAt);
-  emit({ kind: "agent", drop: d.id, note: `${p.name} holds ${seats} seat(s) · deposit ₹${out.amountInr} · consensus ${hold.consensusAt}`, hcsSeq: s.seq, txId: out.txId });
+  emit({ kind: "agent", drop: d.id, note: `${p.name} holds ${seats} seat(s) · deposit ₹${out.amountInr} · consensus ${hold.consensusAt}`, hcsSeq: s.seq, txId: out.txId, outcome: { actor: "partner", ok: true, who: p.name, action: `held ${seats} seat(s) · deposit ₹${out.amountInr} via x402` } });
   broadcast({ type: "partner_hold", drop: d.id, partner: p.name, seats, hold: hold.id });
   return c.json({ ok: true, hold: publicHold(hold) }, 202);
 });
@@ -316,7 +316,7 @@ async function resolveQueue(d: Drop) {
         await redis.decrby(K.used(d.id, h.partner), h.seats);
         await putHold(h);
         await refund(d, h.partner, h.deposit.payer, h.deposit.amountInr, h.status);
-        emit({ kind: "agent", drop: d.id, note: `${p?.name ?? h.partner} hold ${h.status} · deposit refunded` });
+        emit({ kind: "agent", drop: d.id, note: `${p?.name ?? h.partner} hold ${h.status} · deposit refunded`, outcome: { actor: "partner", ok: false, who: p?.name ?? h.partner, action: h.status === "refused" ? "frozen by the provider · deposit refunded" : "partner quota full · no seats · deposit refunded" } });
         continue;
       }
       try {
@@ -333,7 +333,7 @@ async function resolveQueue(d: Drop) {
         await stat(h.partner, "seatsIssued", serials.length);
         await issuePass(d, { anonId: h.id, requested: h.seats, seats: serials.length }, null, h.partner);
         void log(d, { t: "seats_allocated", drop: d.id, partner: h.partner, serials, hold: h.id }).catch(() => {});
-        emit({ kind: "agent", drop: d.id, note: `${p.name} ← ${serials.length} seat token(s) #${serials.join(", #")}`, txId: t.txId });
+        emit({ kind: "agent", drop: d.id, note: `${p.name} ← ${serials.length} seat token(s) #${serials.join(", #")}`, txId: t.txId, outcome: { actor: "partner", ok: true, who: p.name, action: `received ${serials.length} seat token(s) on Hedera` } });
         broadcast({ type: "partner_allocated", drop: d.id, partner: p.name, serials });
       } catch (e) {
         await redis.lpush(K.free(d.id), ...serials.map(String));
@@ -341,7 +341,7 @@ async function resolveQueue(d: Drop) {
         await redis.decrby(K.used(d.id, h.partner), h.seats);
         await putHold(h);
         await refund(d, h.partner, h.deposit.payer, h.deposit.amountInr, "refused by Hedera");
-        emit({ kind: "system", drop: d.id, note: `Hedera refused seats for ${p.name}: ${e instanceof HtsError ? e.code : String(e).slice(0, 80)}` });
+        emit({ kind: "system", drop: d.id, note: `Hedera refused seats for ${p.name}: ${e instanceof HtsError ? e.code : String(e).slice(0, 80)}`, outcome: { actor: "partner", ok: false, who: p.name, action: `Hedera refused the seat tokens · ${e instanceof HtsError ? e.code : "error"}` } });
       }
     }
   } finally {
@@ -381,7 +381,7 @@ onBooked(async (d, rec, booked) => {
   void log(d, { t: "seats_redeemed", drop: d.id, partner: h.partner, serials: used }).catch(() => {});
   await refund(d, h.partner, h.deposit.payer, used.length * h.perSeatInr, "booked");
   const p = await getPartner(h.partner);
-  emit({ kind: "agent", drop: d.id, note: `${p?.name ?? h.partner} booked ${used.length} seat(s) · tokens retired · deposit back` });
+  emit({ kind: "agent", drop: d.id, note: `${p?.name ?? h.partner} booked ${used.length} seat(s) · tokens retired · deposit back`, outcome: { actor: "partner", ok: true, who: p?.name ?? h.partner, action: `booked ${used.length} seat(s) · deposit refunded` } });
 });
 
 /** Unused partner seats (not booked, or the pass expired): wipe them back, keep the deposit, give them to the public. */
@@ -398,7 +398,7 @@ setPartnerRelease(async (d: Drop, rec: PassRecord, count: number) => {
   const target = d.partner?.spillTo ? drops.get(d.partner.spillTo) : undefined;
   void log(d, { t: "seats_reclaimed", drop: d.id, partner: h.partner, serials: unused, to: target?.id }).catch(() => {});
   const p = await getPartner(h.partner);
-  emit({ kind: "system", drop: d.id, note: `${unused.length} unused seat(s) reclaimed from ${p?.name ?? h.partner} · deposit kept${target ? ` · → ${target.label} waitlist` : ""}` });
+  emit({ kind: "system", drop: d.id, note: `${unused.length} unused seat(s) reclaimed from ${p?.name ?? h.partner} · deposit kept${target ? ` · → ${target.label} waitlist` : ""}`, outcome: { actor: "partner", ok: false, who: p?.name ?? h.partner, action: `${unused.length} unused seat(s) taken back · deposit kept` } });
   if (target && unused.length) {
     // Before the public draw: the draw simply gets more seats. After it: the waitlist gets them.
     const fresh = drops.get(target.id)!;
@@ -477,7 +477,7 @@ export function registerPartnerAdmin(admin: Hono) {
     if (!r.refused) {
       await redis.lrem(K.free(d.id), 1, serial);
       emit({ kind: "system", drop: d.id, note: `probe: seat #${serial} sent to ${account} (it was allowlisted)` });
-    } else emit({ kind: "system", drop: d.id, note: `Hedera refused seat #${serial} → ${account}: ${r.code}` });
+    } else emit({ kind: "system", drop: d.id, note: `Hedera refused seat #${serial} → ${account}: ${r.code}`, outcome: { actor: "partner", ok: false, who: account, action: `Hedera refused a seat token · ${r.code}` } });
     return c.json(r);
   });
 

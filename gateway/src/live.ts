@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { LiveEvent } from "@surgepass/shared";
 import { config } from "./config.ts";
+import { redis } from "./redis.ts";
 
 // Live feed for the dashboard and demo screen: individual log events (sampled under load)
 // plus one stats snapshot per second.
@@ -63,7 +64,15 @@ export function emit(e: Omit<LiveEvent, "ts">) {
     recentPeople.push(ev);
     if (recentPeople.length > 100) recentPeople.shift();
   }
+  if (e.outcome) void redis.pipeline().lpush(OUTCOMES, JSON.stringify(ev)).ltrim(OUTCOMES, 0, 499).exec().catch(() => {});
   broadcast({ type: "event", event: ev });
+}
+
+const OUTCOMES = "outcomes";
+
+/** Allow/refuse decisions for the Compare page, newest first. Kept in Redis so they survive a console reload. */
+export async function recentOutcomes(): Promise<LiveEvent[]> {
+  return (await redis.lrange(OUTCOMES, 0, 499)).map((v) => JSON.parse(v) as LiveEvent);
 }
 
 /** Sends to dashboard clients only (admin token). */
