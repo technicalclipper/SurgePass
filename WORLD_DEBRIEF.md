@@ -25,7 +25,9 @@ SurgePass uses World ID in two places: humans verify once in the waiting room to
 
 ## Time to first success
 
-_To be filled in by the team after the first verified proof against the live World app (staging simulator)._
+About an hour of integration work (RP signing, verify call, nonce bookkeeping, IDKit widget), built against a local stand-in first. Once the Developer Portal app, RP ID and signing key were in place, the first staging proof verified on the first attempt: IDKit widget → "Use the simulator" → World ID 4.0 "Unique Human" → our backend's `POST /api/v4/verify/{rp_id}` → session → entry accepted.
+
+The simulator link inside the IDKit widget made the first test much faster than setting up a phone.
 
 ## Friction
 
