@@ -2,11 +2,15 @@ import type { Context } from "hono";
 import { matchDrop, needsBody, type RequestShape } from "@surgepass/shared";
 import { drops } from "./drops.ts";
 import { isPeak } from "./mode.ts";
-import { count, emit } from "./live.ts";
+import { addRevenue, count, emit } from "./live.ts";
 import { forward } from "./proxy.ts";
 import { roomUrl } from "./room.ts";
 import { assertionFor, checkPass, onFinalStep } from "./passes.ts";
 import { who } from "./identity.ts";
+import { slidingCount } from "./ratelimit.ts";
+import { surgePriceInr } from "./pricing.ts";
+import { paymentHeader, paymentRequired, settle } from "./x402.ts";
+import { onAgentSpend } from "./spend.ts";
 
 // The gate: every provider request comes through here. Cheapest checks first.
 
@@ -34,10 +38,7 @@ export async function gate(c: Context): Promise<Response> {
     return forward(req, { body });
   }
 
-  if (m.kind === "read") {
-    count("forwarded");
-    return forward(req, { body });
-  }
+  if (m.kind === "read") return readRoute(c, m.drop, url, body);
 
   // Booking route at peak: only pass holders get through.
   const pass = await checkPass(c, m.drop);
@@ -55,6 +56,45 @@ export async function gate(c: Context): Promise<Response> {
     return c.json({ error: "pass_required", reason: pass.reason, waitingRoom: roomUrl(m.drop.id) }, 403);
   }
   return c.redirect(roomUrl(m.drop.id, url.pathname + url.search), 302);
+}
+
+/** Reads at peak: free within the human's quota (shared with their agents), otherwise paid via x402. */
+async function readRoute(c: Context, drop: import("@surgepass/shared").Drop, url: URL, body?: ArrayBuffer): Promise<Response> {
+  const req = c.req.raw;
+  const r = await who(c, drop.id);
+  const price = surgePriceInr(drop);
+  const pay = paymentHeader((n) => c.req.header(n));
+
+  if (!pay && r.kind !== "anonymous") {
+    const used = await slidingCount(`q:${drop.id}:${r.anonId}`, drop.readPricing.windowSec);
+    if (used <= drop.readPricing.freePerWindow) {
+      count("freeReads");
+      count("forwarded");
+      return forward(req, { body });
+    }
+  }
+
+  if (pay) {
+    const out = await settle(pay, price);
+    if (!out.ok) {
+      count("blocked");
+      emit({ kind: r.kind === "anonymous" ? "bot" : r.kind, method: req.method, path: url.pathname, status: 402, drop: drop.id, note: `payment rejected: ${out.reason}` });
+      return paymentRequired(url.toString(), price, `${drop.label} availability`);
+    }
+    count("paid");
+    addRevenue(out.amountInr);
+    emit({ kind: r.kind === "anonymous" ? "bot" : r.kind, method: req.method, path: url.pathname, status: 200, drop: drop.id, note: `paid ₹${out.amountInr.toFixed(2)}`, txId: out.txId });
+    if (r.kind === "agent" || out.payer) void onAgentSpend(out.payer ?? (r.kind === "agent" ? r.agent : ""), out.amountInr, out.txId);
+    const res = await forward(req, { body });
+    const h = new Headers(res.headers);
+    h.set("PAYMENT-RESPONSE", out.responseHeader);
+    return new Response(res.body, { status: res.status, headers: h });
+  }
+
+  count("challenged402");
+  count("blocked");
+  emit({ kind: r.kind === "anonymous" ? "bot" : r.kind, method: req.method, path: url.pathname, status: 402, drop: drop.id, note: `402 ₹${price.toFixed(2)}${r.kind === "anonymous" ? "" : " (over quota)"}` });
+  return paymentRequired(url.toString(), price, `${drop.label} availability`);
 }
 
 function parseBody(buf: ArrayBuffer, type: string | null): Record<string, unknown> | undefined {

@@ -12,6 +12,7 @@ import { api } from "./api.ts";
 import { jwks } from "./keys.ts";
 import { setWinnersHandler, startLifecycle } from "./lottery.ts";
 import { issuePass, startPassExpiry } from "./passes.ts";
+import { currentPrices } from "./pricing.ts";
 
 const app = new Hono();
 
@@ -24,7 +25,7 @@ app.all("/_sp/room/*", serveRoom);
 
 app.all("*", gate);
 
-setStatsSource(() => ({ backends: health, drops: drops.all().map((d) => ({ id: d.id, status: d.status, peakOn: isPeak(d) })) }));
+setStatsSource(() => ({ backends: health, prices: currentPrices(), drops: drops.all().map((d) => ({ id: d.id, status: d.status, peakOn: isPeak(d) })) }));
 
 await watchDrops();
 startModeController();
