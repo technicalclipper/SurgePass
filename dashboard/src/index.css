@@ -1,0 +1,21 @@
+@import "@worldcoin/mini-apps-ui-kit-react/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+}
+html,
+body {
+  background: rgb(var(--gray-50));
+  color: rgb(var(--gray-900));
+  -webkit-font-smoothing: antialiased;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,96 @@
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { GATEWAY, getToken } from "./api";
+
+// One WebSocket to the gateway's live feed. Keeps 120 s of per-second stats and the last 400 events.
+
+export interface Backend {
+  name: string;
+  rps: number;
+  p95Ms: number;
+  errorRate: number;
+  load: number;
+  crashed: boolean;
+  reachable: boolean;
+}
+
+export interface Stats {
+  ts: number;
+  perSecond: Record<string, number>;
+  totals: Record<string, number>;
+  revenueInr: number;
+  gateway: { cpu: number; rssMb: number };
+  backends: { upstream: Backend; direct: Backend };
+  prices: Record<string, number>;
+  drops: { id: string; status: string; peakOn: boolean }[];
+}
+
+export interface LiveEvent {
+  ts: number;
+  kind: "bot" | "agent" | "human" | "surge" | "draw" | "pass" | "system" | "forward";
+  method?: string;
+  path?: string;
+  status?: number;
+  note?: string;
+  drop?: string;
+  txId?: string;
+  hcsSeq?: number;
+}
+
+const state = { stats: [] as Stats[], events: [] as LiveEvent[], connected: false, other: [] as any[], version: 0 };
+const subs = new Set<() => void>();
+const bump = () => {
+  state.version++;
+  for (const s of subs) s();
+};
+let ws: WebSocket | null = null;
+
+function connect() {
+  const url = new URL("/_sp/live", GATEWAY);
+  url.protocol = url.protocol.replace("http", "ws");
+  url.searchParams.set("token", getToken());
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    state.connected = true;
+    bump();
+  };
+  ws.onclose = () => {
+    state.connected = false;
+    bump();
+    setTimeout(connect, 1000);
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === "stats") {
+      state.stats = [...state.stats.slice(-119), m];
+    } else if (m.type === "event") {
+      state.events = [...state.events.slice(-399), m.event];
+    } else if (m.type === "hello") {
+      state.events = m.recent ?? [];
+    } else {
+      state.other = [...state.other.slice(-199), { ...m, ts: Date.now() }];
+    }
+    bump();
+  };
+}
+
+export function useLive() {
+  useEffect(() => {
+    if (!ws) connect();
+  }, []);
+  useSyncExternalStore(
+    (cb) => {
+      subs.add(cb);
+      return () => void subs.delete(cb);
+    },
+    () => state.version,
+  );
+  return state;
+}
+
+export function useTick(ms = 1000) {
+  const [, set] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => set((x) => x + 1), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+}
