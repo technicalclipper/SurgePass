@@ -15,7 +15,7 @@ export function Rolling({ value, className = "" }: { value: string | number; cla
           <span key={`d${key}`} aria-hidden className="relative inline-block overflow-hidden" style={{ height: ROW, lineHeight: ROW }}>
             <span className="invisible">0</span>
             <span
-              className="absolute inset-x-0 top-0 flex flex-col items-center transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              className="absolute inset-x-0 top-0 flex flex-col items-center transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
               style={{ transform: `translateY(calc(-${ch} * ${ROW}))` }}
             >
               {DIGITS.map((n) => (

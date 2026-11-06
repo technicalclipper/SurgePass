@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { hashscanTx } from "../lib/api";
 import type { LiveEvent } from "../lib/live";
 import { Rolling } from "./rolling";
@@ -120,83 +120,212 @@ function statusChip(status?: number) {
 }
 
 const STEP: Record<string, string> = {
-  match: "match",
-  peak: "peak",
-  identity: "who",
+  match: "Route",
+  peak: "Peak",
+  identity: "Who",
   world: "World ID",
-  entry: "entry",
-  pass: "pass",
-  quota: "quota",
+  entry: "Entry",
+  pass: "Pass",
+  quota: "Quota",
   payment: "x402",
-  budget: "budget",
-  decision: "decision",
-  upstream: "provider",
+  budget: "Budget",
+  decision: "Decision",
+  upstream: "Provider",
 };
 
-/** How the gate handled a request: each deciding step with ✓ / ✗, and the gate's time. */
-export function TraceLine({ e }: { e: LiveEvent }) {
-  if (!e.trace?.length) return null;
-  const shown = e.trace.filter((s) => s.step !== "request");
+const gateTime = (us: number) => (us < 1000 ? `${us} µs` : `${(us / 1000).toFixed(1)} ms`);
+
+/** How the gate handled a request, as a vertical timeline with every detail in full. */
+export function TraceSteps({ e }: { e: LiveEvent }) {
+  const steps = (e.trace ?? []).filter((s) => s.step !== "request");
+  if (!steps.length) return null;
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      {shown.map((s, i) => (
-        <span
-          key={i}
-          title={s.detail}
-          className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
-            s.step === "decision" ? "bg-gray-900 text-gray-0" : s.ok === false ? "bg-error-100 text-error-700" : s.ok === true ? "bg-success-100 text-success-700" : "bg-gray-100 text-gray-700"
-          }`}
-        >
-          <span className="shrink-0 font-semibold">
-            {s.step === "decision" ? "⇒" : s.ok === false ? "✗" : s.ok === true ? "✓" : "•"} {STEP[s.step] ?? s.step}
-          </span>
-          <span className="truncate">{short(s.detail)}</span>
-        </span>
-      ))}
-      {e.us !== undefined && <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">gate {e.us < 1000 ? `${e.us} µs` : `${(e.us / 1000).toFixed(1)} ms`}</span>}
+    <ol className="relative flex flex-col">
+      {steps.map((s, i) => {
+        const decision = s.step === "decision";
+        const mark = decision ? "bg-gray-900 text-gray-0" : s.ok === false ? "bg-error-600 text-gray-0" : s.ok === true ? "bg-success-600 text-gray-0" : "bg-gray-200 text-gray-700";
+        return (
+          <li key={i} className="relative flex gap-3 pb-3 last:pb-0">
+            {i < steps.length - 1 && <span className="absolute left-[9px] top-5 h-[calc(100%-12px)] w-px bg-gray-200" />}
+            <span className={`z-10 mt-0.5 grid size-[19px] shrink-0 place-items-center rounded-full text-[10px] font-bold ${mark}`}>{decision ? "→" : s.ok === false ? "✕" : s.ok === true ? "✓" : "·"}</span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-2xs font-semibold uppercase tracking-[0.08em] ${s.ok === false ? "text-error-700" : "text-gray-400"}`}>{STEP[s.step] ?? s.step}</div>
+              <div className={`text-sm leading-snug [overflow-wrap:anywhere] ${decision ? "font-semibold text-gray-900" : "text-gray-700"}`}>{s.detail}</div>
+            </div>
+          </li>
+        );
+      })}
+      {e.us !== undefined && <li className="mt-3 pl-8 font-mono text-xs text-gray-400">Gate decided in {gateTime(e.us)}</li>}
+    </ol>
+  );
+}
+
+/** Outcome colour for a log line: green let through, amber redirected or asked to pay, red refused or failing. */
+function tone(e: LiveEvent): "ok" | "wait" | "bad" | "info" {
+  const st = e.status ?? 0;
+  if (e.outcome) return e.outcome.ok ? "ok" : "bad";
+  if (e.side === "direct") return st === 0 || st >= 500 ? "bad" : "info";
+  if (st >= 400 && st !== 402) return "bad";
+  if (st === 302 || st === 402) return "wait";
+  if (st >= 200) return "ok";
+  return "info";
+}
+const DOT = { ok: "bg-success-600", wait: "bg-warning-600", bad: "bg-error-600", info: "bg-gray-300" };
+const STATUS_TEXT = { ok: "text-success-700", wait: "text-warning-700", bad: "text-error-700", info: "text-gray-500" };
+
+function statusWord(st?: number) {
+  if (!st) return "";
+  return st === 302 ? "waiting room" : st === 402 ? "pay" : st === 401 ? "not allowed" : st === 403 ? "blocked" : st === 409 ? "duplicate" : st === 429 ? "too many" : st >= 500 ? "site down" : st < 300 ? "ok" : "";
+}
+
+interface Row {
+  e: LiveEvent;
+  n: number;
+}
+
+/** Newest first, with identical consecutive lines (a bot hammering one URL) folded into one row with a count. */
+function rowsOf(events: LiveEvent[], max: number): Row[] {
+  const out: Row[] = [];
+  const sig = (e: LiveEvent) => (e.txId || e.hcsSeq || e.outcome ? `u${e._id ?? e.ts}` : `${e.kind}|${e.side}|${e.status}|${e.method}|${e.path}|${e.note}`);
+  for (let i = events.length - 1; i >= 0 && out.length < max; i--) {
+    const e = events[i]!;
+    const last = out[out.length - 1];
+    if (last && sig(last.e) === sig(e)) last.n++;
+    else out.push({ e, n: 1 });
+  }
+  return out;
+}
+
+const timeOf = (ts: number) => new Date(ts).toLocaleTimeString("en-IN", { hour12: false });
+
+/**
+ * A log: one compact row per request (time · outcome · who · status · route · what happened).
+ * Rows with a trace open in place to show how the gate decided. In `onSelect` mode a click selects
+ * the row instead (the full-screen view shows the trace beside the list).
+ */
+export function LogStream({
+  events,
+  max = 60,
+  dense = false,
+  traces = false,
+  selectedId,
+  onSelect,
+}: {
+  events: LiveEvent[];
+  max?: number;
+  dense?: boolean;
+  traces?: boolean;
+  selectedId?: number;
+  onSelect?: (e: LiveEvent) => void;
+}) {
+  const [open, setOpen] = useState<number | null>(null);
+  const rows = rowsOf(events, max);
+  return (
+    <div className="flex flex-col">
+      {rows.length === 0 && <div className="py-10 text-center text-sm text-gray-400">Waiting for traffic…</div>}
+      {rows.map(({ e, n }, i) => {
+        const id = e._id ?? e.ts + i;
+        const t = tone(e);
+        const k = kindChip(e);
+        const tx = hashscanTx(e.txId);
+        const canOpen = traces && !!e.trace?.length;
+        const isOpen = onSelect ? selectedId === e._id : open === id;
+        const main = e.path ? (
+          <code className="min-w-0 truncate font-mono text-[13px] text-gray-900">
+            {e.method && <span className="text-gray-400">{e.method} </span>}
+            {e.path}
+          </code>
+        ) : (
+          <span className="min-w-0 truncate text-sm text-gray-900">{e.note}</span>
+        );
+        return (
+          <div key={id} className={`border-b border-gray-100 last:border-0 ${isOpen ? "bg-gray-50" : ""}`}>
+            <button
+              type="button"
+              disabled={!canOpen && !onSelect}
+              onClick={() => (onSelect ? onSelect(e) : setOpen(isOpen ? null : id))}
+              className={`flex w-full min-w-0 items-center gap-3 px-2.5 py-2 text-left transition ${canOpen || onSelect ? "hover:bg-gray-50" : "cursor-default"} ${isOpen && onSelect ? "shadow-[inset_3px_0_0_rgb(var(--gray-900))]" : ""}`}
+            >
+              <span className={`shrink-0 font-mono text-[11px] tabular text-gray-400 ${dense ? "" : "w-[58px]"}`}>{timeOf(e.ts)}</span>
+              <span className={`size-2 shrink-0 rounded-full ${DOT[t]}`} />
+              <span className={`shrink-0 truncate rounded px-1.5 py-0.5 text-center text-[10px] font-bold tracking-[0.06em] ${k.cls} ${dense ? "max-w-[96px]" : "w-[92px]"}`}>{k.label}</span>
+              {e.status ? (
+                <span className={`shrink-0 font-mono text-xs font-semibold ${STATUS_TEXT[t]} ${dense ? "" : "w-[128px] truncate"}`}>
+                  {e.status}
+                  {!dense && <span className="font-sans font-medium"> {statusWord(e.status)}</span>}
+                </span>
+              ) : (
+                !dense && e.path && <span className="w-[128px] shrink-0" />
+              )}
+              {main}
+              <span className="ml-auto flex shrink-0 items-center gap-2 pl-1">
+                {!dense && e.path && e.note && <span className="hidden max-w-[260px] truncate text-xs text-gray-500 xl:inline">{e.note}</span>}
+                {n > 1 && <span className="rounded-full bg-gray-900 px-2 py-0.5 font-mono text-[11px] font-semibold text-gray-0">×{n}</span>}
+                {tx && (
+                  <a href={tx} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} title="View on HashScan" className="text-xs font-semibold text-info-600 hover:underline">
+                    {dense ? "↗" : "HashScan ↗"}
+                  </a>
+                )}
+                {(canOpen || onSelect) && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" className={`text-gray-400 transition ${isOpen && !onSelect ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                )}
+              </span>
+            </button>
+            {isOpen && !onSelect && (
+              <div className={`px-2.5 pb-3 pt-1 ${dense ? "pl-6" : "pl-[86px]"}`}>
+                {e.path && e.note && <div className="mb-3 text-sm text-gray-700">{e.note}</div>}
+                <TraceSteps e={e} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-const short = (d: string) => (d.length > 64 ? d.slice(0, 62) + "…" : d);
-
-export function LogStream({ events, max = 60, dense = false, traces = false }: { events: LiveEvent[]; max?: number; dense?: boolean; traces?: boolean }) {
-  const rows = events.slice(-max).reverse();
+/** Everything about one log line, for the full-screen view. */
+export function LogDetail({ e }: { e: LiveEvent | undefined }) {
+  if (!e) return <div className="grid h-full place-items-center text-sm text-gray-400">Pick a line to see how the gate decided.</div>;
+  const k = kindChip(e);
+  const t = tone(e);
+  const tx = hashscanTx(e.txId);
   return (
-    <div className="flex flex-col gap-1.5">
-      {rows.length === 0 && <div className="py-8 text-center text-sm text-gray-400">Waiting for traffic…</div>}
-      {rows.map((e, i) => {
-        const tx = hashscanTx(e.txId);
-        const k = kindChip(e);
-        const bad = (e.status ?? 0) >= 400 || e.trace?.some((s) => s.ok === false && s.step !== "quota" && s.step !== "payment");
-        return (
-          <div
-            key={e._id ?? `${e.ts}-${i}`}
-            className={`rounded-xl border-l-4 bg-gray-50 px-3 ${dense ? "py-1.5" : "py-2"} ${
-              e.kind === "human" || e.kind === "agent" ? (bad ? "border-error-600" : "border-success-600") : e.side === "direct" ? "border-error-600" : (e.status ?? 0) >= 300 ? "border-warning-600" : "border-gray-200"
-            }`}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 font-mono text-xs tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
-              <span className={`inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold tracking-wide ${k.cls}`}>{k.label}</span>
-              {statusChip(e.status)}
-              {e.path && (
-                <code className="min-w-0 truncate font-mono text-sm text-gray-900">
-                  {e.method && <span className="text-gray-500">{e.method} </span>}
-                  {e.path}
-                </code>
-              )}
-              {tx && (
-                <a href={tx} target="_blank" rel="noreferrer" className="ml-auto shrink-0 text-xs font-semibold text-info-600">
-                  HashScan ↗
-                </a>
-              )}
-            </div>
-            {e.note && <div className={`mt-0.5 text-sm ${bad ? "text-error-700" : "text-gray-700"}`}>{e.note}{e.hcsSeq ? <span className="text-gray-500"> · HCS #{e.hcsSeq}</span> : null}</div>}
-            {traces && <TraceLine e={e} />}
-          </div>
-        );
-      })}
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded px-2 py-0.5 text-[11px] font-bold tracking-[0.06em] ${k.cls}`}>{k.label}</span>
+        {e.status ? (
+          <span className={`font-mono text-sm font-semibold ${STATUS_TEXT[t]}`}>
+            {e.status} <span className="font-sans font-medium">{statusWord(e.status)}</span>
+          </span>
+        ) : null}
+        <span className="ml-auto font-mono text-xs text-gray-400">{new Date(e.ts).toLocaleString("en-IN", { hour12: false })}</span>
+      </div>
+      {e.path && (
+        <code className="block rounded-xl bg-gray-50 px-3 py-2.5 font-mono text-[13px] text-gray-900 [overflow-wrap:anywhere]">
+          {e.method && <span className="text-gray-400">{e.method} </span>}
+          {e.path}
+        </code>
+      )}
+      {e.note && <p className="text-base leading-snug text-gray-900">{e.note}</p>}
+      {(tx || e.hcsSeq) && (
+        <div className="flex flex-wrap gap-3 text-sm">
+          {e.hcsSeq ? <span className="rounded-full bg-info-100 px-3 py-1 font-semibold text-info-700">HCS message #{e.hcsSeq}</span> : null}
+          {tx && (
+            <a href={tx} target="_blank" rel="noreferrer" className="rounded-full bg-info-100 px-3 py-1 font-semibold text-info-700 hover:underline">
+              View on HashScan ↗
+            </a>
+          )}
+        </div>
+      )}
+      {e.trace?.length ? (
+        <div>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-gray-400">How the gate decided</div>
+          <TraceSteps e={e} />
+        </div>
+      ) : null}
     </div>
   );
 }
