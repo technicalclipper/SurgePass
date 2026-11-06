@@ -57,7 +57,7 @@ export async function connect(budgetInr = BUDGET) {
     persist();
     return { linked: true, ...state.linked, spentInr: b.spentInr };
   }
-  state.pending.push({ userCode: b.user_code, deviceCode: b.device_code, approvalUrl: b.approval_url, drops: [], kind: "link", createdAt: Date.now() });
+  state.pending.push({ userCode: b.user_code, deviceCode: b.device_code, approvalUrl: b.approval_url, drops: [], kind: "link", createdAt: Date.now(), expiresAt: Date.now() + b.expires_in * 1000 });
   persist();
   return { linked: false, approval_url: b.approval_url, user_code: b.user_code, message: "Ask your human to open the link and approve with World ID." };
 }
@@ -67,10 +67,10 @@ export async function requestDrops(items: { id: string; seats: number; maxBid?: 
   const r = await call("/_sp/api/approvals", { method: "POST", body: JSON.stringify({ agent_account: ACCOUNT, drops: items }) });
   const b = await json(r);
   if (r.status !== 401) return { error: b.error ?? `unexpected ${r.status}`, details: b };
-  state.pending = state.pending.filter((p) => Date.now() - p.createdAt < 300_000); // approvals expire after 5 min
-  state.pending.push({ userCode: b.user_code, deviceCode: b.device_code, approvalUrl: b.approval_url, drops: items.map((i) => i.id), kind: "drop", createdAt: Date.now() });
+  state.pending = state.pending.filter((p) => (p.expiresAt ?? p.createdAt + 300_000) > Date.now()); // forget requests nobody can tap any more
+  state.pending.push({ userCode: b.user_code, deviceCode: b.device_code, approvalUrl: b.approval_url, drops: items.map((i) => i.id), kind: "drop", createdAt: Date.now(), expiresAt: Date.now() + b.expires_in * 1000 });
   persist();
-  return { approval_url: b.approval_url, user_code: b.user_code, expires_in: b.expires_in, label: b.label };
+  return { approval_url: b.approval_url, user_code: b.user_code, expires_in: b.expires_in, expires_at: b.expires_at, label: b.label };
 }
 
 /** Polls every pending approval once; stores tokens for approved ones. */

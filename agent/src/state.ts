@@ -13,6 +13,8 @@ export interface PendingApproval {
   drops: string[];
   kind: "drop" | "link";
   createdAt: number;
+  /** When the link stops accepting the human's tap (a drop request lasts until the drop closes). */
+  expiresAt?: number;
 }
 
 export interface AgentState {

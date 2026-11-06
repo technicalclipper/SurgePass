@@ -28,6 +28,9 @@ export interface Job {
   endedAt?: number;
 }
 
+/** Seconds until a drop closes: how long an agent job keeps waiting for its human. */
+const untilClose = (d: Drop) => String(Math.max(60, Math.ceil((d.closesAt - Date.now()) / 1000)));
+
 const SCRIPTS = { cli: "agent/src/cli.ts", partner: "agent/src/partner.ts" };
 const AVAIL = "/availability/12007/2026-11-06/CC?quota=TQ";
 
@@ -39,7 +42,7 @@ const SCENARIOS: Record<string, Scenario> = {
       normal
         ? [
             { label: "Ask its human for approval", script: "cli", args: ["request", normal.id, "2"], approval: true },
-            { label: "Wait for the human's World ID approval", script: "cli", args: ["wait"] },
+            { label: "Wait for the human's World ID tap (open until the drop closes)", script: "cli", args: ["wait", untilClose(normal)] },
             { label: "Enter the draw for 2 seats", script: "cli", args: ["enter", normal.id, "2"], expect: /"ok": true/ },
             { label: "Check availability (x402 beyond the free quota)", script: "cli", args: ["check", normal.id, AVAIL] },
           ]
@@ -52,7 +55,7 @@ const SCENARIOS: Record<string, Scenario> = {
       premium
         ? [
             { label: "Ask its human for approval (max bid ₹3,000)", script: "cli", args: ["request", premium.id, "1", "3000"], approval: true },
-            { label: "Wait for the human's World ID approval", script: "cli", args: ["wait"] },
+            { label: "Wait for the human's World ID tap (open until bidding closes)", script: "cli", args: ["wait", untilClose(premium)] },
             { label: "Seal a bid · pay the deposit via x402", script: "cli", args: ["enter", premium.id], expect: /"ok": true/ },
             { label: "Reveal the bid when bidding closes, then read the result", script: "cli", args: ["status", premium.id], repeatUntil: /"status": "(results|closed)"/, everyMs: 5000, maxMs: 40 * 60_000 },
           ]

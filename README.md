@@ -305,7 +305,8 @@ REQUEST (when the human asks, e.g. the night before)
   Human: "Get me Train 12007, 6 Nov, CC, 2 seats"
   Agent → GET /drops → POST /drops/{id}/enter
   SurgePass → 401 HumanApproval { approval_url, user_code, token_endpoint, expires_in }
-  Human → approval card in chat or a push → one tap → World App confirm
+  Agent shows approval_url to its human through its own channel (chat, bot, app notification)
+  Human taps whenever they see it, up to the moment the drop closes → World App confirm
   Agent polls token_endpoint → bearer token scoped to that drop (+ max bid for premium)
 
 PEAK (zero human interaction)
@@ -323,8 +324,13 @@ Content-Type: application/json
 
 { "error": "human_approval_required", "drop": "train-12007-2026-11-06-CC",
   "label": "Train 12007 · 6 Nov · CC", "approval_url": "https://gate.example/approve/K7XP-29QD",
-  "user_code": "K7XP-29QD", "token_endpoint": "https://gate.example/token", "expires_in": 300 }
+  "user_code": "K7XP-29QD", "token_endpoint": "https://gate.example/token",
+  "expires_in": 41400, "expires_at": "2026-11-06T04:30:00Z" }
 ```
+
+The approval link stays open until the drop's entry window closes, so the agent can ask early
+and the human can tap whenever they see the message. SurgePass doesn't contact the human itself:
+the agent delivers the link, the same way a TV shows a sign-in code.
 
 **Supported agent types**
 - **API agents:** read the 401, show the link, poll for a token, pay 402s with any x402 client.

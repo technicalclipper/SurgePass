@@ -16,10 +16,15 @@ import { agentSpent } from "./spend.ts";
 //      entering directly, so one human is one entry whichever way they come in.
 // Flow is device-code style: the agent gets a 401 with an approval link + user code, shows it to
 // its human, and polls the token endpoint with its secret device code.
+// A drop approval stays open until that drop's entry window closes, so the agent can ask early
+// (e.g. the night before) and the human taps whenever they see the message; at drop time the agent
+// acts alone with its token.
 
 export const agents = new Hono();
 
-const APPROVAL_TTL = 300;
+/** A link request waits a day for its tap; a drop request waits until the drop closes. */
+const LINK_APPROVAL_SEC = 24 * 3600;
+const MAX_APPROVAL_SEC = 14 * 86_400;
 const LINK_DAYS = 30;
 
 interface ApprovalItem {
@@ -56,6 +61,17 @@ const userCode = () => {
 /** Signal bound into the World proof, so an approval can't be reused with other parameters. */
 const signalFor = (a: Approval, it: ApprovalItem) => `agent:${a.agent}|seats:${it.seats}|maxbid:${it.maxBid ?? 0}`;
 
+/** When an approval request stops accepting the tap: the earliest close among its drops. */
+function approvalDeadline(kind: Approval["kind"], items: ApprovalItem[]): number {
+  const now = Date.now();
+  if (kind === "link") return now + LINK_APPROVAL_SEC * 1000;
+  const close = Math.min(...items.map((i) => drops.get(i.drop)?.closesAt ?? now));
+  return Math.min(Math.max(close, now + 60_000), now + MAX_APPROVAL_SEC * 1000);
+}
+
+/** A drop that can still be approved: not closed yet. */
+const approvable = (d: Drop) => (d.status === "open" || d.status === "scheduled") && d.closesAt > Date.now();
+
 async function createApproval(kind: Approval["kind"], agent: string, items: ApprovalItem[], budgetInr?: number): Promise<Approval> {
   const a: Approval = {
     code: userCode(),
@@ -66,9 +82,10 @@ async function createApproval(kind: Approval["kind"], agent: string, items: Appr
     items,
     status: "pending",
     createdAt: Date.now(),
-    expiresAt: Date.now() + APPROVAL_TTL * 1000,
+    expiresAt: approvalDeadline(kind, items),
   };
-  await redis.multi().set(K.approval(a.code), JSON.stringify(a), "EX", APPROVAL_TTL + 600).set(K.device(a.deviceCode), a.code, "EX", APPROVAL_TTL + 600).exec();
+  const keep = Math.ceil((a.expiresAt - Date.now()) / 1000) + 600;
+  await redis.multi().set(K.approval(a.code), JSON.stringify(a), "EX", keep).set(K.device(a.deviceCode), a.code, "EX", keep).exec();
   emit({ kind: "agent", note: `${kind === "link" ? "link" : "approval"} requested · ${agent} · code ${a.code}`, drop: items[0]?.drop });
   return a;
 }
@@ -91,7 +108,8 @@ function challengeBody(a: Approval, label: string) {
     user_code: a.code,
     device_code: a.deviceCode,
     token_endpoint: `${config.origin}/_sp/api/token`,
-    expires_in: APPROVAL_TTL,
+    expires_in: Math.max(0, Math.round((a.expiresAt - Date.now()) / 1000)),
+    expires_at: new Date(a.expiresAt).toISOString(),
     interval: 2,
   };
 }
@@ -100,6 +118,7 @@ function challengeBody(a: Approval, label: string) {
 export async function approvalChallenge(c: Context, d: Drop): Promise<Response> {
   const body = (await c.req.json().catch(() => ({}))) as { seats?: number; maxBid?: number; agent_account?: string };
   const agent = c.req.header("x-agent-account") ?? body.agent_account ?? "unknown";
+  if (!approvable(d)) return c.json({ error: "drop_closed", drop: d.id }, 400);
   const seats = Math.min(d.maxSeatsPerEntry, Math.max(1, Number(body.seats ?? 1)));
   const a = await createApproval("drop", agent, [{ drop: d.id, seats, maxBid: body.maxBid }]);
   c.header("WWW-Authenticate", `HumanApproval realm="${d.id}"`);
@@ -117,6 +136,7 @@ agents.post("/approvals", async (c) => {
   for (const x of body.drops ?? []) {
     const d = drops.get(x.id);
     if (!d) return c.json({ error: "unknown_drop", drop: x.id }, 404);
+    if (!approvable(d)) return c.json({ error: "drop_closed", drop: d.id }, 400);
     if (d.pool === "premium" && d.premium && x.maxBid !== undefined && (x.maxBid < d.premium.floorInr || x.maxBid > d.premium.ceilingInr)) {
       return c.json({ error: "max_bid_out_of_range", drop: d.id, floorInr: d.premium.floorInr, ceilingInr: d.premium.ceilingInr }, 400);
     }

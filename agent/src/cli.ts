@@ -3,7 +3,7 @@ import * as sp from "./surgepass.ts";
 // Reference agent from the terminal, for scripted demos:
 //   npm run cli -w agent -- connect 50
 //   npm run cli -w agent -- request "12007" 2
-//   npm run cli -w agent -- wait
+//   npm run cli -w agent -- wait [seconds]
 //   npm run cli -w agent -- enter "12007"
 //   npm run cli -w agent -- check "12007" /availability/12007/2026-11-06/CC?quota=TQ
 //   npm run cli -w agent -- status "12007"
@@ -29,7 +29,8 @@ switch (cmd) {
     break;
   }
   case "wait":
-    out(await sp.waitForApproval());
+    // Optional: how many seconds to keep waiting (default 5 min); the approval itself lasts until the drop closes.
+    out(await sp.waitForApproval(a ? Number(a) * 1000 : undefined));
     break;
   case "enter": {
     await sp.pollApprovals();

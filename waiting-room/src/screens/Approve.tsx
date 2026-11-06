@@ -127,7 +127,7 @@ export function Approve({ code }: { code: string }) {
           </Card>
         )}
         <div className="mt-2 text-center text-xs text-gray-400">
-          Code {a.code} · expires in {clock(a.expiresAt - now)}
+          Code {a.code} · {a.expiresAt - now > 3_600_000 ? `open until ${new Date(a.expiresAt).toLocaleString("en-IN", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST` : `expires in ${clock(a.expiresAt - now)}`}
         </div>
       </div>
 
