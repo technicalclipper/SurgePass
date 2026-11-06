@@ -15,8 +15,11 @@ export interface RpContextOut {
   action: string;
   signal?: string;
   environment: string;
+  allow_legacy_proofs: boolean;
   dev: boolean;
 }
+
+const ALLOW_LEGACY = process.env.WORLD_ALLOW_LEGACY === "true";
 
 /** Issues the signed context the IDKit widget needs. The nonce is remembered so only proofs we asked for are accepted. */
 export async function issueRpContext(action: string, signal?: string): Promise<RpContextOut> {
@@ -30,6 +33,7 @@ export async function issueRpContext(action: string, signal?: string): Promise<R
       action,
       signal,
       environment: "dev",
+      allow_legacy_proofs: false,
       dev: true,
     };
   }
@@ -41,6 +45,7 @@ export async function issueRpContext(action: string, signal?: string): Promise<R
     action,
     signal,
     environment: config.world.environment,
+    allow_legacy_proofs: ALLOW_LEGACY,
     dev: false,
   };
 }
