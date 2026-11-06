@@ -37,7 +37,7 @@ const train = {
   peak,
 };
 
-await create({
+const tatkal = await create({
   ...train,
   label: "Train 12007 · CC · Tatkal",
   subtitle: "Mumbai CSMT → Pune · 6 Nov · 06:40",
@@ -59,6 +59,25 @@ await create({
   maxSeatsPerEntry: 2,
   premium: { floorInr: 1000, ceilingInr: 2000, depositInr: 200, revealSec: 15 },
   readPricing: { freePerWindow: 1, windowSec: 10, minInr: 0.1, maxInr: 5 },
+});
+
+await create({
+  ...train,
+  label: "Train 12007 · CC · Partner quota",
+  subtitle: "Authorised partners · Mumbai CSMT → Pune · 6 Nov",
+  pool: "partner",
+  conditions: [{ location: "query", key: "quota", operator: "equals", value: "AG" }],
+  readPatterns: [],
+  seats: envNum("PARTNER_SEATS", 6),
+  maxSeatsPerEntry: 4,
+  priceInr: 1000,
+  partner: {
+    capPerPartner: envNum("PARTNER_CAP", 4),
+    depositInr: 20,
+    bookWithinSec: envNum("PARTNER_BOOK_WITHIN_SEC", 120),
+    openDelaySec: envNum("PARTNER_OPEN_DELAY_SEC", 0),
+    spillTo: tatkal.id,
+  },
 });
 
 await create({

@@ -399,7 +399,12 @@ setPartnerRelease(async (d: Drop, rec: PassRecord, count: number) => {
   void log(d, { t: "seats_reclaimed", drop: d.id, partner: h.partner, serials: unused, to: target?.id }).catch(() => {});
   const p = await getPartner(h.partner);
   emit({ kind: "system", drop: d.id, note: `${unused.length} unused seat(s) reclaimed from ${p?.name ?? h.partner} · deposit kept${target ? ` · → ${target.label} waitlist` : ""}` });
-  if (target && unused.length) await releaseSeats(target, { ...rec, jti: `spill-${rec.jti}`, price: null, pool: target.pool }, unused.length);
+  if (target && unused.length) {
+    // Before the public draw: the draw simply gets more seats. After it: the waitlist gets them.
+    const fresh = drops.get(target.id)!;
+    if (fresh.status === "open" || fresh.status === "scheduled") await saveDrop({ ...fresh, seats: fresh.seats + unused.length });
+    else await releaseSeats(fresh, { ...rec, jti: `spill-${rec.jti}`, price: null, pool: fresh.pool }, unused.length);
+  }
 });
 
 /** A frozen partner can't use passes it already has. */

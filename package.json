@@ -26,7 +26,8 @@
     "flood": "tsx loadgen/flood.ts",
     "humans": "tsx loadgen/humans.ts",
     "agent": "tsx agent/src/cli.ts",
-    "build": "npm run build -w waiting-room && npm run build -w dashboard"
+    "build": "npm run build -w waiting-room && npm run build -w dashboard",
+    "partner": "tsx agent/src/partner.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
