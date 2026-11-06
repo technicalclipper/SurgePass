@@ -175,11 +175,86 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
 
   useEffect(() => {
     const el = canvas.current!;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
     el.width = CW * dpr;
     el.height = CH * dpr;
-    const g = el.getContext("2d")!;
+    const g = el.getContext("2d", { alpha: true })!;
     g.scale(dpr, dpr);
+    const FONT = getComputedStyle(el).fontFamily || "system-ui, sans-serif";
+
+    // The parts that never change (globe body, gate, site card, labels) are drawn once, off screen.
+    const still = document.createElement("canvas");
+    still.width = CW * dpr;
+    still.height = CH * dpr;
+    const s0 = still.getContext("2d")!;
+    s0.scale(dpr, dpr);
+    {
+      const grd = s0.createRadialGradient(GLOBE.x - 60, GLOBE.y - 70, 20, GLOBE.x, GLOBE.y, GLOBE.r);
+      grd.addColorStop(0, "#FFFFFF");
+      grd.addColorStop(1, "#F3F4F5");
+      s0.beginPath();
+      s0.arc(GLOBE.x, GLOBE.y, GLOBE.r, 0, Math.PI * 2);
+      s0.fillStyle = grd;
+      s0.fill();
+      s0.strokeStyle = C.line;
+      s0.lineWidth = 1.5;
+      s0.stroke();
+      // site card
+      s0.fillStyle = "#FFFFFF";
+      s0.beginPath();
+      s0.roundRect(SITE.x, SITE.y, SITE.w, SITE.h, 22);
+      s0.fill();
+      s0.stroke();
+      s0.textAlign = "left";
+      s0.fillStyle = C.ink;
+      s0.font = `600 16px ${FONT}`;
+      s0.fillText("QuickBook A", SITE.x + 18, SITE.y + 34);
+      s0.fillStyle = C.muted;
+      s0.font = `500 12px ${FONT}`;
+      s0.fillText("booking site", SITE.x + 18, SITE.y + 52);
+      s0.fillText("Load", SITE.x + 18, SITE.y + SITE.h - 46);
+      s0.fillStyle = "#F3F4F5";
+      s0.beginPath();
+      s0.roundRect(SITE.x + 18, SITE.y + SITE.h - 34, SITE.w - 36, 8, 4);
+      s0.fill();
+      // labels for where turned-away traffic goes
+      s0.textAlign = "center";
+      s0.fillStyle = C.muted;
+      s0.font = `600 11px ${FONT}`;
+      s0.fillText("WAITING ROOM · PAY", GATE.x - 120, GATE.bottom + 52);
+      s0.fillText("BLOCKED", GATE.x - 120, GATE.top - 40);
+    }
+    const gate = document.createElement("canvas");
+    gate.width = (GATE.w + 4) * dpr;
+    gate.height = (GATE.bottom - GATE.top + 4) * dpr;
+    {
+      const c = gate.getContext("2d")!;
+      c.scale(dpr, dpr);
+      c.fillStyle = C.ink;
+      c.beginPath();
+      c.roundRect(2, 2, GATE.w, GATE.bottom - GATE.top, 24);
+      c.fill();
+      const sx = GATE.w / 2 + 2;
+      const sy = (GATE.bottom - GATE.top) / 2 - 6;
+      c.beginPath();
+      c.moveTo(sx, sy - 18);
+      c.lineTo(sx + 15, sy - 11);
+      c.lineTo(sx + 15, sy + 2);
+      c.quadraticCurveTo(sx + 15, sy + 15, sx, sy + 22);
+      c.quadraticCurveTo(sx - 15, sy + 15, sx - 15, sy + 2);
+      c.lineTo(sx - 15, sy - 11);
+      c.closePath();
+      c.fillStyle = "#FFFFFF";
+      c.fill();
+      c.fillStyle = C.ink;
+      c.font = `600 15px ${FONT}`;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("S", sx, sy + 2);
+      c.fillStyle = "rgba(255,255,255,0.7)";
+      c.font = `600 11px ${FONT}`;
+      c.fillText("SurgePass", sx, GATE.bottom - GATE.top - 20);
+    }
 
     const dots: Dot[] = [];
     const sparks: Spark[] = [];
@@ -189,22 +264,25 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
     let siteGlow = 0;
     let prev = performance.now();
     let raf = 0;
+    const tilt = rad(-12);
+    const cosT = Math.cos(tilt);
+    const sinT = Math.sin(tilt);
 
     const project = (lat: number, lon: number) => {
       const la = rad(lat);
       const lo = rad(lon) + rot;
-      const tilt = rad(-12);
-      const x = Math.cos(la) * Math.sin(lo);
+      const cl = Math.cos(la);
+      const x = cl * Math.sin(lo);
       const y0 = Math.sin(la);
-      const z0 = Math.cos(la) * Math.cos(lo);
-      const y = y0 * Math.cos(tilt) - z0 * Math.sin(tilt);
-      const z = y0 * Math.sin(tilt) + z0 * Math.cos(tilt);
-      return { x: GLOBE.x + GLOBE.r * x, y: GLOBE.y - GLOBE.r * y, z };
+      const z0 = cl * Math.cos(lo);
+      return { x: GLOBE.x + GLOBE.r * x, y: GLOBE.y - GLOBE.r * (y0 * cosT - z0 * sinT), z: y0 * sinT + z0 * cosT };
     };
 
+    // Visible traffic sources, refreshed a few times a second rather than on every spawn.
+    let visible: { x: number; y: number }[] = [];
+    let visibleAt = 0;
     const spawn = (kind: Kind) => {
-      const visible = SOURCES.map(([a, b]) => project(a, b)).filter((p) => p.z > 0.15);
-      const p = visible.length ? visible[Math.floor(Math.random() * visible.length)]! : { x: GLOBE.x, y: GLOBE.y };
+      const p = visible.length ? visible[(Math.random() * visible.length) | 0]! : { x: GLOBE.x, y: GLOBE.y };
       const gy = GATE.top + 30 + Math.random() * (GATE.bottom - GATE.top - 60);
       const good = kind === "human" || kind === "agent" || kind === "partner" || kind === "through";
       dots.push({
@@ -228,142 +306,70 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
       }
     };
 
-    const bez = (d: Dot, t: number) => {
-      const ex = GATE.x - GATE.w / 2 - 4;
-      const x = (1 - t) * (1 - t) * d.x0 + 2 * (1 - t) * t * d.cx + t * t * ex;
-      const y = (1 - t) * (1 - t) * d.y0 + 2 * (1 - t) * t * d.cy + t * t * d.gy;
-      return { x, y };
+    const remove = <T,>(arr: T[], i: number) => {
+      arr[i] = arr[arr.length - 1]!;
+      arr.pop();
     };
 
-    const drawGlobe = () => {
-      const grd = g.createRadialGradient(GLOBE.x - 60, GLOBE.y - 70, 20, GLOBE.x, GLOBE.y, GLOBE.r);
-      grd.addColorStop(0, "#FFFFFF");
-      grd.addColorStop(1, "#F3F4F5");
-      g.beginPath();
-      g.arc(GLOBE.x, GLOBE.y, GLOBE.r, 0, Math.PI * 2);
-      g.fillStyle = grd;
-      g.fill();
-      g.strokeStyle = C.line;
-      g.lineWidth = 1.5;
-      g.stroke();
-      g.lineWidth = 1;
-      // graticule: meridians and parallels, front half only
-      g.strokeStyle = C.line;
-      for (let lon = -180; lon < 180; lon += 20) {
+    // One path per colour per frame instead of one draw call per dot.
+    const buckets = new Map<string, number[]>();
+    const add = (color: string, x: number, y: number, r: number) => {
+      let b = buckets.get(color);
+      if (!b) buckets.set(color, (b = []));
+      b.push(x, y, r);
+    };
+    const flush = (alpha = 1) => {
+      g.globalAlpha = alpha;
+      for (const [color, b] of buckets) {
+        if (!b.length) continue;
         g.beginPath();
-        let started = false;
-        for (let lat = -90; lat <= 90; lat += 5) {
+        for (let i = 0; i < b.length; i += 3) {
+          g.moveTo(b[i]! + b[i + 2]!, b[i + 1]!);
+          g.arc(b[i]!, b[i + 1]!, b[i + 2]!, 0, Math.PI * 2);
+        }
+        g.fillStyle = color;
+        g.fill();
+        b.length = 0;
+      }
+      g.globalAlpha = 1;
+    };
+
+    const drawGrid = () => {
+      g.beginPath();
+      for (let lon = -180; lon < 180; lon += 30) {
+        let pen = false;
+        for (let lat = -90; lat <= 90; lat += 10) {
           const p = project(lat, lon);
           if (p.z < 0) {
-            started = false;
+            pen = false;
             continue;
           }
-          if (!started) g.moveTo(p.x, p.y);
-          else g.lineTo(p.x, p.y);
-          started = true;
+          if (pen) g.lineTo(p.x, p.y);
+          else g.moveTo(p.x, p.y);
+          pen = true;
         }
-        g.stroke();
       }
       for (let lat = -60; lat <= 60; lat += 30) {
-        g.beginPath();
-        let started = false;
-        for (let lon = -180; lon <= 180; lon += 5) {
+        let pen = false;
+        for (let lon = -180; lon <= 180; lon += 10) {
           const p = project(lat, lon);
           if (p.z < 0) {
-            started = false;
+            pen = false;
             continue;
           }
-          if (!started) g.moveTo(p.x, p.y);
-          else g.lineTo(p.x, p.y);
-          started = true;
+          if (pen) g.lineTo(p.x, p.y);
+          else g.moveTo(p.x, p.y);
+          pen = true;
         }
-        g.stroke();
       }
+      g.strokeStyle = C.line;
+      g.lineWidth = 1;
+      g.stroke();
       for (const [a, b] of SOURCES) {
         const p = project(a, b);
-        if (p.z < 0) continue;
-        g.beginPath();
-        g.arc(p.x, p.y, 2 + p.z * 1.2, 0, Math.PI * 2);
-        g.fillStyle = `rgba(113,118,128,${0.25 + p.z * 0.6})`;
-        g.fill();
+        if (p.z > 0) add(p.z > 0.5 ? "rgba(113,118,128,0.75)" : "rgba(113,118,128,0.4)", p.x, p.y, 2 + p.z * 1.2);
       }
-    };
-
-    const drawGate = () => {
-      const x = GATE.x - GATE.w / 2;
-      g.save();
-      g.shadowColor = `rgba(242,40,13,${0.35 * gateFlash})`;
-      g.shadowBlur = 40 * gateFlash;
-      g.fillStyle = C.ink;
-      g.beginPath();
-      g.roundRect(x, GATE.top, GATE.w, GATE.bottom - GATE.top, 24);
-      g.fill();
-      g.restore();
-      // shield
-      const sx = GATE.x;
-      const sy = (GATE.top + GATE.bottom) / 2 - 8;
-      g.beginPath();
-      g.moveTo(sx, sy - 18);
-      g.lineTo(sx + 15, sy - 11);
-      g.lineTo(sx + 15, sy + 2);
-      g.quadraticCurveTo(sx + 15, sy + 15, sx, sy + 22);
-      g.quadraticCurveTo(sx - 15, sy + 15, sx - 15, sy + 2);
-      g.lineTo(sx - 15, sy - 11);
-      g.closePath();
-      g.fillStyle = "#FFFFFF";
-      g.fill();
-      g.fillStyle = C.ink;
-      g.font = "600 15px var(--font-sans), system-ui, sans-serif";
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText("S", sx, sy + 2);
-      g.fillStyle = "rgba(255,255,255,0.7)";
-      g.font = "600 11px var(--font-sans), system-ui, sans-serif";
-      g.fillText("SurgePass", GATE.x, GATE.bottom - 22);
-      // where the turned-away traffic goes
-      g.fillStyle = C.muted;
-      g.font = "600 11px var(--font-sans), system-ui, sans-serif";
-      g.fillText("WAITING ROOM · PAY", GATE.x - 120, GATE.bottom + 52);
-      g.fillText("BLOCKED", GATE.x - 120, GATE.top - 40);
-    };
-
-    const drawSite = () => {
-      g.save();
-      g.shadowColor = `rgba(0,194,48,${0.25 * siteGlow})`;
-      g.shadowBlur = 30 * siteGlow;
-      g.fillStyle = "#FFFFFF";
-      g.beginPath();
-      g.roundRect(SITE.x, SITE.y, SITE.w, SITE.h, 22);
-      g.fill();
-      g.restore();
-      g.strokeStyle = C.line;
-      g.lineWidth = 1.5;
-      g.beginPath();
-      g.roundRect(SITE.x, SITE.y, SITE.w, SITE.h, 22);
-      g.stroke();
-      g.textAlign = "left";
-      g.textBaseline = "alphabetic";
-      g.fillStyle = C.ink;
-      g.font = "600 16px var(--font-sans), system-ui, sans-serif";
-      g.fillText("QuickBook A", SITE.x + 18, SITE.y + 34);
-      g.fillStyle = C.muted;
-      g.font = "500 12px var(--font-sans), system-ui, sans-serif";
-      g.fillText("booking site", SITE.x + 18, SITE.y + 52);
-      const s = latest.current?.backends.upstream;
-      const load = Math.min(1, s ? s.load ?? 0 : 0);
-      g.fillText("Load", SITE.x + 18, SITE.y + SITE.h - 46);
-      g.fillStyle = s && (s.crashed || s.errorRate > 0.3) ? C.bot : "#00A82A";
-      g.textAlign = "right";
-      g.fillText(s && (s.crashed || s.errorRate > 0.3) ? "failing" : "steady", SITE.x + SITE.w - 18, SITE.y + SITE.h - 46);
-      g.fillStyle = "#F3F4F5";
-      g.beginPath();
-      g.roundRect(SITE.x + 18, SITE.y + SITE.h - 34, SITE.w - 36, 8, 4);
-      g.fill();
-      g.fillStyle = C.human;
-      g.beginPath();
-      g.roundRect(SITE.x + 18, SITE.y + SITE.h - 34, Math.max(8, (SITE.w - 36) * Math.max(0.06, load)), 8, 4);
-      g.fill();
-      g.textAlign = "center";
+      flush();
     };
 
     const frame = (now: number) => {
@@ -372,8 +378,16 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
       rot += dt * 0.18;
       gateFlash = Math.max(0, gateFlash - dt * 2.5);
       siteGlow = Math.max(0, siteGlow - dt * 1.5);
+      if (now - visibleAt > 250) {
+        visibleAt = now;
+        visible = [];
+        for (const [a, b] of SOURCES) {
+          const p = project(a, b);
+          if (p.z > 0.15) visible.push(p);
+        }
+      }
 
-      // spawn at the gate's real rates (bots scaled to stay readable)
+      // spawn at the gate's real rates (turned-away traffic scaled to stay readable)
       const r = rates(latest.current);
       const k = r.bots > MAX_BOT_DOTS ? MAX_BOT_DOTS / r.bots : 1;
       owed.blocked += r.blocked * k * dt;
@@ -389,20 +403,42 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
       while (pending.current.length) spawn(pending.current.shift()!);
 
       g.clearRect(0, 0, CW, CH);
-      drawGlobe();
+      g.drawImage(still, 0, 0, CW, CH);
+      drawGrid();
+
+      // site load bar and glow
+      const s = latest.current?.backends.upstream;
+      const failing = !!s && (s.crashed || s.errorRate > 0.3);
+      g.fillStyle = failing ? C.bot : C.human;
+      g.beginPath();
+      g.roundRect(SITE.x + 18, SITE.y + SITE.h - 34, Math.max(8, (SITE.w - 36) * Math.max(0.06, Math.min(1, s?.load ?? 0))), 8, 4);
+      g.fill();
+      g.textAlign = "right";
+      g.font = `500 12px ${FONT}`;
+      g.fillText(failing ? "failing" : "steady", SITE.x + SITE.w - 18, SITE.y + SITE.h - 46);
+      if (siteGlow > 0.02) {
+        g.strokeStyle = `rgba(0,194,48,${0.35 * siteGlow})`;
+        g.lineWidth = 6;
+        g.beginPath();
+        g.roundRect(SITE.x - 3, SITE.y - 3, SITE.w + 6, SITE.h + 6, 25);
+        g.stroke();
+      }
 
       // dots
+      const halos: number[] = [];
       for (let i = dots.length - 1; i >= 0; i--) {
         const d = dots[i]!;
         d.t += dt * d.speed;
-        const good = d.kind === "human" || d.kind === "agent" || d.kind === "partner" || d.kind === "through";
         const person = d.kind === "human" || d.kind === "agent" || d.kind === "partner";
+        const good = person || d.kind === "through";
         let x: number;
         let y: number;
         if (d.phase === 0) {
-          const p = bez(d, Math.min(1, d.t));
-          x = p.x;
-          y = p.y;
+          const t = Math.min(1, d.t);
+          const u = 1 - t;
+          const ex = GATE.x - GATE.w / 2 - 4;
+          x = u * u * d.x0 + 2 * u * t * d.cx + t * t * ex;
+          y = u * u * d.y0 + 2 * u * t * d.cy + t * t * d.gy;
           if (d.t >= 1) {
             if (good) {
               d.phase = 1;
@@ -411,57 +447,62 @@ function Scene({ last, people }: { last?: Stats; people: LiveEvent[] }) {
               gateFlash = Math.min(1, gateFlash + 0.08);
               if (d.kind === "blocked") burst(x, y, C.bot, 3);
               else sparks.push({ x, y, vx: -60 - Math.random() * 50, vy: d.kind === "pay" ? 70 + Math.random() * 40 : 90 + Math.random() * 50, life: 1.2, color: C.wait });
-              dots.splice(i, 1);
+              remove(dots, i);
               continue;
             }
           }
         } else {
+          const f = Math.min(1, d.t * 1.8);
           const sx = GATE.x + GATE.w / 2;
-          const ex = SITE.x;
-          x = sx + (ex - sx) * Math.min(1, d.t * 1.8);
-          y = d.gy + (SITE.y + SITE.h / 2 - d.gy) * Math.min(1, d.t * 1.8);
-          if (d.t * 1.8 >= 1) {
+          x = sx + (SITE.x - sx) * f;
+          y = d.gy + (SITE.y + SITE.h / 2 - d.gy) * f;
+          if (f >= 1) {
             if (person) siteGlow = 1;
-            dots.splice(i, 1);
+            remove(dots, i);
             continue;
           }
         }
         const color = d.kind === "human" ? C.human : d.kind === "agent" ? C.agent : d.kind === "partner" ? C.partner : d.kind === "through" ? C.muted : d.kind === "blocked" ? C.bot : C.wait;
+        add(color, x, y, person ? 5.5 : 2.6);
+        if (person) halos.push(x, y);
+      }
+      flush(0.9);
+      if (halos.length) {
+        g.globalAlpha = 0.18;
         g.beginPath();
-        g.arc(x, y, person ? 5.5 : 2.6, 0, Math.PI * 2);
-        g.fillStyle = color;
-        g.globalAlpha = person ? 1 : 0.85;
-        g.fill();
-        if (person) {
-          g.globalAlpha = 0.18;
-          g.beginPath();
-          g.arc(x, y, 11, 0, Math.PI * 2);
-          g.fill();
+        for (let i = 0; i < halos.length; i += 2) {
+          g.moveTo(halos[i]! + 11, halos[i + 1]!);
+          g.arc(halos[i]!, halos[i + 1]!, 11, 0, Math.PI * 2);
         }
+        g.fillStyle = C.human;
+        g.fill();
         g.globalAlpha = 1;
       }
 
       // sparks: blocked bots shatter, the rest drift off to the waiting room / pay
       for (let i = sparks.length - 1; i >= 0; i--) {
-        const s = sparks[i]!;
-        s.life -= dt * 1.6;
-        if (s.life <= 0) {
-          sparks.splice(i, 1);
+        const sp = sparks[i]!;
+        sp.life -= dt * 1.6;
+        if (sp.life <= 0) {
+          remove(sparks, i);
           continue;
         }
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
-        s.vy += (s.color === C.bot ? -30 : 40) * dt;
-        g.globalAlpha = Math.max(0, Math.min(1, s.life));
-        g.fillStyle = s.color;
-        g.beginPath();
-        g.arc(s.x, s.y, s.color === C.bot ? 1.8 : 2.4, 0, Math.PI * 2);
-        g.fill();
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        sp.vy += (sp.color === C.bot ? -30 : 40) * dt;
+        add(sp.color, sp.x, sp.y, sp.color === C.bot ? 1.8 : 2.4);
       }
-      g.globalAlpha = 1;
+      flush(0.7);
 
-      drawGate();
-      drawSite();
+      // gate, with a red rim that brightens as bots hit it
+      if (gateFlash > 0.02) {
+        g.strokeStyle = `rgba(242,40,13,${0.45 * gateFlash})`;
+        g.lineWidth = 8;
+        g.beginPath();
+        g.roundRect(GATE.x - GATE.w / 2 - 4, GATE.top - 4, GATE.w + 8, GATE.bottom - GATE.top + 8, 28);
+        g.stroke();
+      }
+      g.drawImage(gate, GATE.x - GATE.w / 2 - 2, GATE.top - 2, GATE.w + 4, GATE.bottom - GATE.top + 4);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

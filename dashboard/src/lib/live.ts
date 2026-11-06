@@ -62,9 +62,16 @@ export interface TraceStep {
 const state = { stats: [] as Stats[], events: [] as LiveEvent[], people: [] as LiveEvent[], connected: false, other: [] as any[], flood: null as FloodState | null, version: 0 };
 const isPerson = (e: LiveEvent) => e.side !== "direct" && (e.kind === "human" || e.kind === "agent" || e.kind === "pass");
 const subs = new Set<() => void>();
+/** Tells subscribers about new data at most every 200 ms: a flood sends dozens of log lines a second,
+ *  and re-rendering every page on each one makes animations stutter. */
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 const bump = () => {
   state.version++;
-  for (const s of subs) s();
+  if (notifyTimer) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    for (const s of subs) s();
+  }, 200);
 };
 let ws: WebSocket | null = null;
 let lastMessageAt = 0;
