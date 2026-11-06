@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { admin, GATEWAY, hashscanTx, type Drop } from "../lib/api";
 import type { LiveEvent } from "../lib/live";
-import { ago, Pill, Segmented } from "../ui/console";
+import { ago, Segmented } from "../ui/console";
 import { LogPanel } from "../ui/logpanel";
 
-// Side by side, per drop: who the gate let through and who it turned away, for people (World ID),
-// agents (human approval) and partner companies (allowlist + Hedera KYC). Agents and companies are
-// started from here as jobs against the drop you pick; people are you, in the waiting room.
+// Per drop: run agents and companies against it (left), and see who the gate let through and who it
+// turned away (right), with the drop's full log underneath. People are you, in the waiting room.
 
 type Actor = "person" | "agent" | "partner";
 
@@ -34,19 +33,23 @@ interface Scenario {
   pools: Drop["pool"][];
 }
 
-const COLUMNS: { actor: Actor; title: string; sub: string; ok: string; no: string; scenarios: string[] }[] = [
-  { actor: "person", title: "People", sub: "World ID · one entry per human", ok: "Verified", no: "Not verified", scenarios: [] },
-  { actor: "agent", title: "Agents", sub: "Only with their human's World ID approval", ok: "Let through", no: "Turned away", scenarios: ["agent-normal", "agent-premium", "rogue"] },
-  { actor: "partner", title: "Partner companies", sub: "Allowlist + KYC on the Hedera seat token", ok: "Let through", no: "Turned away", scenarios: ["partner-tripnest", "partner-unlisted", "hedera-probe"] },
+const GROUPS: { title: string; ids: string[] }[] = [
+  { title: "Agents", ids: ["agent-normal", "agent-premium", "rogue"] },
+  { title: "Partner companies", ids: ["partner-tripnest", "partner-unlisted", "hedera-probe"] },
 ];
 
-const actorOf = (scenario: string): Actor => (scenario.startsWith("partner") || scenario.startsWith("hedera") ? "partner" : "agent");
+const ACTORS: { actor: Actor; title: string; sub: string }[] = [
+  { actor: "person", title: "People", sub: "World ID, one entry per human" },
+  { actor: "agent", title: "Agents", sub: "Need their human's World ID approval" },
+  { actor: "partner", title: "Partner companies", sub: "Allowlist + KYC on the seat token" },
+];
+
 const isLive = (d: Drop) => (d.status === "open" || d.status === "scheduled") && d.closesAt > Date.now();
 const timeLeft = (d: Drop) => {
   const ms = d.closesAt - Date.now();
-  if (ms <= 0) return d.status === "results" ? "results out" : d.status;
+  if (ms <= 0) return d.status === "results" ? "Results out" : d.status === "revealing" ? "Revealing" : d.status === "drawing" ? "Drawing" : "Closed";
   const m = Math.floor(ms / 60_000);
-  return m >= 60 ? `closes in ${Math.floor(m / 60)}h ${m % 60}m` : `closes in ${m}m ${Math.floor((ms % 60_000) / 1000)}s`;
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m left` : `${m}m ${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}s left`;
 };
 
 const remember = (k: string, v?: string) => {
@@ -54,10 +57,12 @@ const remember = (k: string, v?: string) => {
     if (v === undefined) return localStorage.getItem(k) ?? undefined;
     localStorage.setItem(k, v);
   } catch {
-    // per-viewer convenience only
+    // a per-viewer convenience only
   }
   return undefined;
 };
+
+const card = "rounded-3xl bg-gray-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
 
 export function Compare() {
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -106,9 +111,13 @@ export function Compare() {
     };
   }, [selected]);
 
+  // A selected drop that no longer exists (after a reset) falls back to "All drops".
   const drop = drops.find((d) => d.id === selected);
-  const byId = useMemo(() => new Map(drops.map((d) => [d.id, d])), [drops]);
-  // A picked drop: its own history plus any of the latest decisions for it, without duplicates.
+  useEffect(() => {
+    if (selected !== "all" && drops.length && !drop) setSelected("all");
+  }, [drops.length, drop, selected]);
+
+  // A picked drop: its own history plus the latest decisions for it, without duplicates.
   const decisions = useMemo(() => {
     if (!drop) return outcomes;
     const seen = new Set<string>();
@@ -119,250 +128,334 @@ export function Compare() {
       })
       .sort((a, b) => b.ts - a.ts);
   }, [drop, log, outcomes]);
-  const counts = (id: string) => {
-    const o = outcomes.filter((e) => e.drop === id);
-    return { ok: o.filter((e) => e.outcome!.ok).length, no: o.filter((e) => !e.outcome!.ok).length };
-  };
+
+  const tally = (list: LiveEvent[]) => ({ ok: list.filter((e) => e.outcome!.ok).length, no: list.filter((e) => !e.outcome!.ok).length });
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <header>
         <h1 className="text-2xl font-semibold tracking-[-0.01em]">Compare</h1>
-        <p className="mt-1 text-sm text-gray-500">Pick a drop, run agents and companies against it, and see who the gate let through and who it turned away. Every drop keeps its own history.</p>
-      </div>
+        <p className="mt-1 text-sm text-gray-500">Run agents and companies against a drop and see who gets through.</p>
+      </header>
 
-      <DropTabs drops={drops} selected={selected} onSelect={setSelected} counts={counts} total={{ ok: outcomes.filter((e) => e.outcome!.ok).length, no: outcomes.filter((e) => !e.outcome!.ok).length }} />
+      <DropBar drops={drops} selected={selected} onSelect={setSelected} count={(id) => tally(id === "all" ? outcomes : outcomes.filter((e) => e.drop === id))} />
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        {COLUMNS.map((col) => {
-          const mine = decisions.filter((e) => e.outcome?.actor === col.actor);
-          const colJobs = jobs.filter((j) => actorOf(j.scenario) === col.actor && (!drop || j.drop === drop.id));
-          return (
-            <section key={col.actor} className="flex min-w-0 flex-col gap-4 rounded-3xl bg-gray-0 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-              <div>
-                <div className="text-lg font-semibold tracking-[-0.01em]">{col.title}</div>
-                <div className="text-xs text-gray-500">{col.sub}</div>
-              </div>
-              {col.actor === "person" ? (
-                <PeopleLinks drops={drop ? [drop] : drops} />
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {col.scenarios.map((id) => {
-                    const s = scenarios.find((x) => x.id === id);
-                    return s ? <RunCard key={id} s={s} drops={drops} selected={drop} jobs={jobs} /> : null;
-                  })}
-                </div>
-              )}
-              {colJobs.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <div className="text-2xs font-bold uppercase tracking-wide text-gray-400">Recent runs</div>
-                  {colJobs.slice(0, 3).map((j) => (
-                    <JobCard key={j.id} j={j} showDrop={!drop} />
-                  ))}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2.5">
-                <Lane title={col.ok} ok events={mine.filter((e) => e.outcome!.ok)} byId={byId} showDrop={!drop} />
-                <Lane title={col.no} ok={false} events={mine.filter((e) => !e.outcome!.ok)} byId={byId} showDrop={!drop} />
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <RunPanel drops={drops} selected={drop} scenarios={scenarios} jobs={jobs} />
+
+      <section className={`${card} p-6`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold tracking-[-0.01em]">Results</h2>
+          <span className="text-sm text-gray-500">{drop ? drop.label : "All drops"}</span>
+        </div>
+        <div className="mt-5 grid gap-x-8 gap-y-8 xl:grid-cols-3">
+          {ACTORS.map((a) => {
+            const list = decisions.filter((e) => e.outcome?.actor === a.actor);
+            return <ResultColumn key={a.actor} title={a.title} sub={a.sub} events={list} t={tally(list)} drops={drops} showDrop={!drop} />;
+          })}
+        </div>
+      </section>
 
       <DropLog drop={drop} events={drop ? log : outcomes} />
     </div>
   );
 }
 
-function DropTabs({ drops, selected, onSelect, counts, total }: { drops: Drop[]; selected: string; onSelect: (id: string) => void; counts: (id: string) => { ok: number; no: number }; total: { ok: number; no: number } }) {
-  const tab = (active: boolean) => `flex min-w-[210px] shrink-0 flex-col gap-2 rounded-2xl p-4 text-left transition ${active ? "bg-gray-900 text-gray-0 shadow-lifted" : "bg-gray-0 text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-gray-50"}`;
-  const tally = (c: { ok: number; no: number }, active: boolean) => (
-    <div className="flex items-center gap-3 text-xs font-semibold tabular">
-      <span className={active ? "text-success-100" : "text-success-700"}>✓ {c.ok}</span>
-      <span className={active ? "text-error-100" : "text-error-700"}>✕ {c.no}</span>
-    </div>
-  );
-  return (
-    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
-      <button onClick={() => onSelect("all")} className={tab(selected === "all")}>
-        <span className="text-sm font-semibold">All drops</span>
-        <span className={`text-xs ${selected === "all" ? "text-gray-0/60" : "text-gray-500"}`}>Latest decisions everywhere</span>
-        {tally(total, selected === "all")}
+// ── Drop bar ───────────────────────────────────────────────────────────────
+
+function DropBar({ drops, selected, onSelect, count }: { drops: Drop[]; selected: string; onSelect: (id: string) => void; count: (id: string) => { ok: number; no: number } }) {
+  const item = (id: string, body: ReactNode) => {
+    const active = selected === id;
+    return (
+      <button
+        key={id}
+        onClick={() => onSelect(id)}
+        className={`flex shrink-0 items-center gap-3 rounded-full py-2 pl-4 pr-2 text-sm transition ${active ? "bg-gray-900 text-gray-0" : "bg-gray-0 text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-gray-100"}`}
+      >
+        {body}
+        <Tally {...count(id)} inverted={active} />
       </button>
-      {drops.map((d) => {
-        const active = selected === d.id;
-        return (
-          <button key={d.id} onClick={() => onSelect(d.id)} className={tab(active)}>
-            <div className="flex items-center justify-between gap-2">
-              <span className={`rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${active ? "bg-gray-0/15" : "bg-gray-100 text-gray-700"}`}>{d.pool}</span>
-              <span className={`text-2xs font-semibold ${isLive(d) ? (active ? "text-success-100" : "text-success-700") : active ? "text-gray-0/60" : "text-gray-500"}`}>{timeLeft(d)}</span>
-            </div>
-            <span className="truncate text-sm font-semibold">{d.label}</span>
-            {tally(counts(d.id), active)}
-          </button>
-        );
-      })}
-    </div>
+    );
+  };
+  return (
+    <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {item("all", <span className="font-semibold">All drops</span>)}
+      {drops.map((d) =>
+        item(
+          d.id,
+          <span className="flex items-center gap-2 whitespace-nowrap">
+            <span className={`size-2 rounded-full ${isLive(d) ? "bg-success-600" : "bg-gray-300"}`} />
+            <span className="font-semibold">{d.label}</span>
+            <span className={selected === d.id ? "text-gray-0/60" : "text-gray-500"}>{timeLeft(d)}</span>
+          </span>,
+        ),
+      )}
+    </nav>
   );
 }
 
-function RunCard({ s, drops, selected, jobs }: { s: Scenario; drops: Drop[]; selected?: Drop; jobs: Job[] }) {
-  const eligible = drops.filter((d) => s.pools.includes(d.pool) && isLive(d));
-  const fallback = selected && eligible.some((d) => d.id === selected.id) ? selected.id : eligible[0]?.id ?? "";
-  const [pick, setPick] = useState(fallback);
-  const [err, setErr] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  // Follow the drop tab when it changes; keep the user's own pick otherwise.
-  useEffect(() => setPick(fallback), [selected?.id, eligible.length]);
-  const target = eligible.some((d) => d.id === pick) ? pick : fallback;
-  const busy = jobs.some((j) => j.scenario === s.id && (j.status === "running" || j.status === "waiting_approval"));
+function Tally({ ok, no, inverted = false }: { ok: number; no: number; inverted?: boolean }) {
+  return (
+    <span className="flex items-center gap-1 text-xs font-semibold tabular">
+      <span className={`rounded-full px-2 py-0.5 ${inverted ? "bg-gray-0/15 text-gray-0" : "bg-success-100 text-success-700"}`}>✓ {ok}</span>
+      <span className={`rounded-full px-2 py-0.5 ${inverted ? "bg-gray-0/15 text-gray-0" : "bg-error-100 text-error-700"}`}>✕ {no}</span>
+    </span>
+  );
+}
 
-  async function run() {
+// ── Left: run a test ───────────────────────────────────────────────────────
+
+function RunPanel({ drops, selected, scenarios, jobs }: { drops: Drop[]; selected?: Drop; scenarios: Scenario[]; jobs: Job[] }) {
+  const live = drops.filter(isLive);
+  const [target, setTarget] = useState<string>(selected && isLive(selected) ? selected.id : live[0]?.id ?? "");
+  // Follow the drop bar; fall back to the first open drop when the target closes.
+  useEffect(() => {
+    if (selected && isLive(selected)) setTarget(selected.id);
+  }, [selected?.id]);
+  useEffect(() => {
+    if (!live.some((d) => d.id === target)) setTarget(live[0]?.id ?? "");
+  }, [live.length]);
+  const d = live.find((x) => x.id === target);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run(id: string) {
     setErr(null);
-    setStarting(true);
     try {
-      await admin(`/jobs/${s.id}`, { method: "POST", body: JSON.stringify({ drop: target }) });
+      await admin(`/jobs/${id}`, { method: "POST", body: JSON.stringify({ drop: target }) });
     } catch (e: any) {
       setErr(e.message);
-    } finally {
-      setStarting(false);
     }
   }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold">{s.title}</div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-2xs text-gray-500">
-            {s.who}
-            <span className={`rounded-full px-1.5 py-px font-semibold ${s.expect === "refused" ? "bg-error-100 text-error-700" : "bg-success-100 text-success-700"}`}>should be {s.expect === "refused" ? "turned away" : "let through"}</span>
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(340px,420px)_minmax(0,1fr)]">
+      <section className={`${card} p-5`}>
+        <h2 className="text-lg font-semibold tracking-[-0.01em]">Run a test</h2>
+        <label className="mt-4 block text-xs font-medium text-gray-500" htmlFor="sp-target">
+          Target drop
+        </label>
+        {live.length ? (
+          <select id="sp-target" value={target} onChange={(e) => setTarget(e.target.value)} className="mt-1.5 h-11 w-full rounded-2xl border border-gray-200 bg-gray-0 px-3 text-sm font-medium outline-none focus:border-gray-400">
+            {live.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.label} · {x.pool} · {timeLeft(x)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="mt-1.5 rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-500">Every drop has closed. Reseed the drops to run tests.</div>
+        )}
+
+        {d && d.pool !== "partner" && (
+          <Group title="You">
+            <Row
+              title={d.pool === "premium" ? "Place a sealed bid" : "Enter the draw"}
+              sub="Waiting room · scan with World App"
+              action={
+                <a href={`${GATEWAY}/_sp/room/${d.id}`} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-full bg-gray-100 px-4 text-xs font-semibold text-gray-900 hover:bg-gray-200">
+                  Open ↗
+                </a>
+              }
+            />
+          </Group>
+        )}
+
+        {GROUPS.map((g) => (
+          <Group key={g.title} title={g.title}>
+            {g.ids.map((id) => {
+              const s = scenarios.find((x) => x.id === id);
+              if (!s) return null;
+              const fits = !!d && s.pools.includes(d.pool);
+              const busy = jobs.some((j) => j.scenario === id && (j.status === "running" || j.status === "waiting_approval"));
+              return (
+                <Row
+                  key={id}
+                  title={s.title}
+                  sub={
+                    <>
+                      {s.who} · <span className={s.expect === "refused" ? "text-error-700" : "text-success-700"}>should be {s.expect === "refused" ? "turned away" : "let through"}</span>
+                    </>
+                  }
+                  dim={!fits}
+                  action={
+                    fits ? (
+                      <button disabled={busy} onClick={() => void run(id)} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-xs font-semibold text-gray-0 transition hover:bg-gray-700 active:scale-[0.98] disabled:bg-gray-200 disabled:text-gray-500">
+                        {busy ? <span className="size-3 animate-spin rounded-full border-2 border-gray-500/30 border-t-gray-500" /> : "▶"} {busy ? "Running" : "Run"}
+                      </button>
+                    ) : (
+                      <span className="text-2xs text-gray-400">{s.pools.join(" / ")} drops</span>
+                    )
+                  }
+                />
+              );
+            })}
+          </Group>
+        ))}
+        {err && <div className="mt-4 rounded-2xl bg-error-100 px-4 py-3 text-sm text-error-700">{err}</div>}
+      </section>
+
+      <section className={`${card} flex max-h-[640px] min-w-0 flex-col p-5`}>
+        <h2 className="text-lg font-semibold tracking-[-0.01em]">Runs</h2>
+        {jobs.length ? (
+          <div className="mt-1 flex min-h-0 flex-col divide-y divide-gray-100 overflow-y-auto pr-1">
+            {jobs.slice(0, 12).map((j) => (
+              <JobRow key={j.id} j={j} />
+            ))}
           </div>
-        </div>
-        <button
-          disabled={busy || starting || !target}
-          onClick={() => void run()}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-xs font-semibold text-gray-0 transition hover:bg-gray-700 active:scale-[0.98] disabled:bg-gray-200 disabled:text-gray-500"
-        >
-          {busy ? (
-            <>
-              <span className="size-3 animate-spin rounded-full border-2 border-gray-500/30 border-t-gray-500" /> Running
-            </>
-          ) : (
-            <>Run ▶</>
-          )}
-        </button>
-      </div>
-      {eligible.length ? (
-        <select value={target} onChange={(e) => setPick(e.target.value)} className="mt-2.5 h-9 w-full rounded-xl border border-gray-200 bg-gray-0 px-2.5 text-xs font-medium outline-none focus:border-gray-400">
-          {eligible.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.label} · {timeLeft(d)}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <div className="mt-2.5 rounded-xl bg-gray-100 px-3 py-2 text-2xs text-gray-500">No open {s.pools.join(" or ")} drop</div>
-      )}
-      {err && <div className="mt-2 rounded-lg bg-error-100 px-2.5 py-1.5 text-2xs font-medium text-error-700">{err}</div>}
+        ) : (
+          <div className="grid flex-1 place-items-center py-12 text-center text-sm text-gray-400">Press Run on a test. Its steps show here as it goes.</div>
+        )}
+      </section>
     </div>
   );
 }
 
-function JobCard({ j, showDrop }: { j: Job; showDrop: boolean }) {
-  const [open, setOpen] = useState(false);
-  const done = j.steps.filter((s) => s.status === "ok" || s.status === "refused").length;
-  const chip = {
-    running: { label: "running", cls: "bg-warning-100 text-warning-700" },
-    waiting_approval: { label: "needs World ID", cls: "bg-info-100 text-info-700" },
-    done: { label: "✓ let through", cls: "bg-success-100 text-success-700" },
-    blocked: { label: "✕ blocked", cls: "bg-error-100 text-error-700" },
-    failed: { label: j.expect === "refused" ? "⚠ not blocked" : "⚠ didn't get through", cls: "bg-warning-100 text-warning-700" },
-  }[j.status];
-  const verdict =
-    j.status === "blocked" ? "Turned away, as expected" : j.status === "done" ? "Let through, as expected" : j.status === "failed" ? (j.expect === "refused" ? "Expected to be turned away, but it wasn't" : "Expected to get through, but it didn't") : null;
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-0 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-xs font-semibold">
-            {j.title} · {j.who}
-          </div>
-          <div className="text-2xs text-gray-500">
-            {showDrop && `${j.dropLabel} · `}
-            {ago(Date.now() - j.startedAt)} ago · {done}/{j.steps.length} steps
-          </div>
-        </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold uppercase ${chip.cls}`}>{chip.label}</span>
+    <div className="mt-5">
+      <div className="mb-1 text-2xs font-bold uppercase tracking-[0.08em] text-gray-400">{title}</div>
+      <div className="flex flex-col divide-y divide-gray-100">{children}</div>
+    </div>
+  );
+}
+
+function Row({ title, sub, action, dim = false }: { title: string; sub: ReactNode; action: ReactNode; dim?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 py-2.5 ${dim ? "opacity-50" : ""}`}>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold">{title}</div>
+        <div className="truncate text-xs text-gray-500">{sub}</div>
       </div>
-      {verdict && <div className={`mt-2 rounded-lg px-2.5 py-1.5 text-2xs font-semibold ${chip.cls}`}>{verdict}</div>}
+      <div className="shrink-0">{action}</div>
+    </div>
+  );
+}
+
+const JOB_CHIP: Record<Job["status"], string> = {
+  running: "bg-warning-100 text-warning-700",
+  waiting_approval: "bg-info-100 text-info-700",
+  done: "bg-success-100 text-success-700",
+  blocked: "bg-error-100 text-error-700",
+  failed: "bg-warning-100 text-warning-700",
+};
+
+function JobRow({ j }: { j: Job }) {
+  const active = j.status === "running" || j.status === "waiting_approval";
+  const [open, setOpen] = useState(active);
+  const [raw, setRaw] = useState(false);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+  const label =
+    j.status === "waiting_approval" ? "Needs World ID" : j.status === "running" ? "Running" : j.status === "done" ? "✓ Let through" : j.status === "blocked" ? "✕ Blocked" : j.expect === "refused" ? "⚠ Not blocked" : "⚠ Didn't get through";
+  return (
+    <div className="py-3">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-start justify-between gap-3 text-left">
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold">{j.title}</span>
+          <span className="block truncate text-xs text-gray-500">
+            {j.who} · {j.dropLabel} · {ago(Date.now() - j.startedAt)} ago
+          </span>
+        </span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-2xs font-bold ${JOB_CHIP[j.status]}`}>{label}</span>
+      </button>
+
       {j.status === "waiting_approval" && j.approvalUrl && (
-        <a href={j.approvalUrl} target="_blank" rel="noreferrer" className="mt-2.5 flex items-center justify-center gap-2 rounded-xl bg-info-600 px-3 py-2.5 text-sm font-semibold text-gray-0 hover:opacity-90">
-          Open approval page · scan with World App ↗
+        <a href={j.approvalUrl} target="_blank" rel="noreferrer" className="mt-3 flex h-11 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-gray-0 hover:bg-gray-700">
+          Approve with World ID ↗
         </a>
       )}
-      <ol className="mt-2.5 flex flex-col gap-1.5">
-        {j.steps.map((s, i) => (
-          <li key={i} className="flex items-start gap-2 text-xs">
-            <span
-              className={`mt-px grid size-4 shrink-0 place-items-center rounded-full text-[9px] font-bold ${
-                s.status === "ok" ? "bg-success-600 text-gray-0" : s.status === "refused" ? "bg-error-600 text-gray-0" : s.status === "failed" ? "bg-warning-600 text-gray-0" : s.status === "running" ? "bg-gray-900 text-gray-0" : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              {s.status === "ok" ? "✓" : s.status === "refused" ? "✕" : s.status === "failed" ? "!" : s.status === "running" ? <span className="size-2 animate-spin rounded-full border border-gray-0/30 border-t-gray-0" /> : i + 1}
-            </span>
-            <span className={s.status === "pending" ? "text-gray-400" : "text-gray-900"}>
-              {s.label}
-              {s.status === "refused" && <span className="ml-1.5 font-semibold text-error-700">· refused, as expected</span>}
-              {s.status === "failed" && <span className="ml-1.5 font-semibold text-warning-700">· not what should happen</span>}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <button onClick={() => setOpen(!open)} className="mt-2 text-2xs font-semibold text-info-600">
-        {open ? "Hide raw output" : "Show raw output"}
-      </button>
+
       {open && (
-        <pre className="mt-1.5 max-h-64 overflow-auto rounded-xl bg-gray-900 p-3 font-mono text-[10px] leading-snug text-gray-0">
-          {j.steps.map((s) => (s.out ? `▸ ${s.label}\n${s.out}\n\n` : "")).join("") || "No output yet"}
-        </pre>
+        <>
+          <ol className="mt-3 flex flex-col gap-2">
+            {j.steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-xs">
+                <StepMark s={s.status} n={i + 1} />
+                <span className={s.status === "pending" ? "text-gray-400" : "text-gray-900"}>
+                  {s.label}
+                  {s.status === "refused" && <span className="text-error-700"> · refused, as expected</span>}
+                  {s.status === "failed" && <span className="text-warning-700"> · not what should happen</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <button onClick={() => setRaw(!raw)} className="mt-2.5 text-2xs font-semibold text-gray-500 hover:text-gray-900">
+            {raw ? "Hide raw output" : "Raw output"}
+          </button>
+          {raw && (
+            <pre className="mt-2 max-h-64 overflow-auto rounded-2xl bg-gray-900 p-3 font-mono text-[10px] leading-snug text-gray-0">
+              {j.steps.map((s) => (s.out ? `▸ ${s.label}\n${s.out}\n\n` : "")).join("") || "No output yet"}
+            </pre>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function Lane({ title, ok, events, byId, showDrop }: { title: string; ok: boolean; events: LiveEvent[]; byId: Map<string, Drop>; showDrop: boolean }) {
+function StepMark({ s, n }: { s: Job["steps"][number]["status"]; n: number }) {
+  const cls = {
+    ok: "bg-success-600 text-gray-0",
+    refused: "bg-error-600 text-gray-0",
+    failed: "bg-warning-600 text-gray-0",
+    running: "bg-gray-900 text-gray-0",
+    pending: "bg-gray-100 text-gray-500",
+  }[s];
   return (
-    <div className={`flex min-w-0 flex-col rounded-2xl p-2.5 ${ok ? "bg-success-100/60" : "bg-error-100/60"}`}>
-      <div className="mb-2 flex items-center justify-between px-1">
-        <span className={`text-2xs font-bold uppercase tracking-wide ${ok ? "text-success-700" : "text-error-700"}`}>
-          {ok ? "✓" : "✕"} {title}
-        </span>
-        <span className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-2xs font-bold tabular ${ok ? "bg-success-600 text-gray-0" : "bg-error-600 text-gray-0"}`}>{events.length}</span>
+    <span className={`mt-px grid size-[18px] shrink-0 place-items-center rounded-full text-[10px] font-bold ${cls}`}>
+      {s === "ok" ? "✓" : s === "refused" ? "✕" : s === "failed" ? "!" : s === "running" ? <span className="size-2.5 animate-spin rounded-full border-2 border-gray-0/30 border-t-gray-0" /> : n}
+    </span>
+  );
+}
+
+// ── Right: results ─────────────────────────────────────────────────────────
+
+function ResultColumn({ title, sub, events, t, drops, showDrop }: { title: string; sub: string; events: LiveEvent[]; t: { ok: number; no: number }; drops: Drop[]; showDrop: boolean }) {
+  const [only, setOnly] = useState<"all" | "ok" | "no">("all");
+  const shown = events.filter((e) => only === "all" || (only === "ok") === e.outcome!.ok);
+  const label = (id?: string) => drops.find((d) => d.id === id)?.label;
+  const tab = (v: "ok" | "no", body: string, cls: string) => (
+    <button onClick={() => setOnly(only === v ? "all" : v)} title={only === v ? "Show all" : `Show only ${v === "ok" ? "let through" : "turned away"}`} className={`rounded-full px-2 py-0.5 transition ${only === v ? "ring-2 ring-gray-900/70" : ""} ${cls}`}>
+      {body}
+    </button>
+  );
+  return (
+    <div className="flex min-w-0 flex-col">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+        <div className="min-w-0">
+          <div className="font-semibold">{title}</div>
+          <div className="truncate text-xs text-gray-500">{sub}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1 text-xs font-semibold tabular">
+          {tab("ok", `✓ ${t.ok}`, "bg-success-100 text-success-700")}
+          {tab("no", `✕ ${t.no}`, "bg-error-100 text-error-700")}
+        </div>
       </div>
-      <div className="flex max-h-[420px] flex-col gap-1.5 overflow-y-auto">
-        {events.length === 0 && <div className="py-6 text-center text-2xs text-gray-400">Nothing yet</div>}
-        {events.map((e, i) => {
-          const d = byId.get(e.drop ?? "");
+      <div className="max-h-[440px] overflow-y-auto">
+        {shown.length === 0 && <div className="py-10 text-center text-sm text-gray-400">Nothing yet</div>}
+        {shown.map((e, i) => {
+          const ok = e.outcome!.ok;
           const link = hashscanTx(e.txId);
           return (
-            <div key={`${e.ts}-${i}`} className="rounded-xl bg-gray-0 px-2.5 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-[11px] font-semibold text-gray-900">{e.outcome!.who}</span>
-                <span className="shrink-0 text-2xs text-gray-400">{ago(Date.now() - e.ts)}</span>
-              </div>
-              <div className="mt-0.5 break-words text-xs leading-snug text-gray-700 [overflow-wrap:anywhere]">{e.outcome!.action}</div>
-              {(link || (showDrop && d)) && (
-                <div className="mt-1 flex items-center gap-2 text-2xs text-gray-500">
-                  {showDrop && d && <span className="truncate">{d.label}</span>}
-                  {link && (
-                    <a href={link} target="_blank" rel="noreferrer" className="ml-auto shrink-0 font-semibold text-info-600">
-                      Hedera ↗
-                    </a>
-                  )}
+            <div key={`${e.ts}-${i}`} className="flex gap-3 border-b border-gray-50 py-3 last:border-0">
+              <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${ok ? "bg-success-100 text-success-700" : "bg-error-100 text-error-700"}`}>{ok ? "✓" : "✕"}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate font-mono text-xs font-semibold text-gray-900">{e.outcome!.who}</span>
+                  <span className="shrink-0 text-2xs text-gray-400">{ago(Date.now() - e.ts)}</span>
                 </div>
-              )}
+                <div className="mt-0.5 text-sm leading-snug text-gray-700 [overflow-wrap:anywhere]">{e.outcome!.action}</div>
+                {(link || (showDrop && label(e.drop))) && (
+                  <div className="mt-1 flex items-center gap-3 text-2xs text-gray-500">
+                    {showDrop && label(e.drop) && <span className="truncate">{label(e.drop)}</span>}
+                    {link && (
+                      <a href={link} target="_blank" rel="noreferrer" className="shrink-0 font-semibold text-info-600 hover:underline">
+                        View on Hedera ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -383,17 +476,8 @@ function DropLog({ drop, events }: { drop?: Drop; events: LiveEvent[] }) {
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-[-0.01em]">{drop ? `${drop.label} · full log` : "Latest decisions · all drops"}</h2>
-          <p className="text-xs text-gray-500">
-            {drop ? (
-              <>
-                Everything that happened to this drop, newest first, kept across reloads (bot traffic left out).{" "}
-                <Pill kind={drop.status}>{drop.status}</Pill>
-              </>
-            ) : (
-              "Pick a drop above for its complete history: entries, approvals, payments, the draw and Hedera writes."
-            )}
-          </p>
+          <h2 className="text-lg font-semibold tracking-[-0.01em]">{drop ? "Full log" : "Latest decisions"}</h2>
+          <p className="text-xs text-gray-500">{drop ? `Everything that happened to ${drop.label}, kept across reloads. Bot traffic left out.` : "Pick a drop above for its complete history."}</p>
         </div>
         <Segmented
           value={filter}
@@ -406,29 +490,7 @@ function DropLog({ drop, events }: { drop?: Drop; events: LiveEvent[] }) {
           ]}
         />
       </div>
-      <LogPanel title={`${shown.length} line${shown.length === 1 ? "" : "s"}`} events={shown} traces inlineMax={300} className="h-[620px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
+      <LogPanel title={`${shown.length} line${shown.length === 1 ? "" : "s"}`} events={shown} traces inlineMax={300} className="h-[560px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
     </section>
-  );
-}
-
-/** People are real: you open the waiting room and scan with your World App. */
-function PeopleLinks({ drops }: { drops: Drop[] }) {
-  const open = drops.filter((d) => isLive(d) && d.pool !== "partner");
-  return (
-    <div className="flex flex-col gap-2.5">
-      {open.map((d) => (
-        <a key={d.id} href={`${GATEWAY}/_sp/room/${d.id}`} target="_blank" rel="noreferrer" className="group flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 transition hover:bg-gray-100">
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{d.pool === "premium" ? "Place a sealed bid" : "Enter the draw"}</span>
-            <span className="block truncate text-2xs text-gray-500">
-              {d.label} · {timeLeft(d)}
-            </span>
-          </span>
-          <span className="inline-flex h-9 shrink-0 items-center rounded-full bg-gray-0 px-4 text-xs font-semibold text-gray-900 shadow-sm group-hover:bg-gray-900 group-hover:text-gray-0">Open ↗</span>
-        </a>
-      ))}
-      {!open.length && <div className="rounded-2xl bg-gray-50 px-3 py-4 text-center text-xs text-gray-500">{drops.length === 1 ? "This drop is for partners only, or it has closed" : "No open drops"}</div>}
-      <div className="px-1 text-2xs text-gray-400">Opens the waiting room. Scan with your World App there.</div>
-    </div>
   );
 }
