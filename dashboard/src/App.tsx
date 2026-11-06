@@ -3,6 +3,7 @@ import { admin, GATEWAY, getToken, setToken } from "./lib/api";
 import { useLive } from "./lib/live";
 import { Compare } from "./pages/Compare";
 import { Integrate } from "./pages/Integrate";
+import { Landing } from "./pages/Landing";
 import { DropsPage } from "./pages/Drops";
 import { Demo } from "./pages/Demo";
 import { Proofs, Routes, Traffic } from "./pages/Other";
@@ -40,7 +41,22 @@ function usePage(): [Page, (p: Page) => void] {
   return [p, (x) => (location.hash = x)];
 }
 
+/** The base route (no hash) is the public landing page; every other page is the console. */
+function useHash() {
+  const [h, setH] = useState(() => location.hash.slice(1));
+  useEffect(() => {
+    const on = () => {
+      setH(location.hash.slice(1));
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  return h;
+}
+
 export function App() {
+  const hash = useHash();
   const [ok, setOk] = useState<boolean | null>(null);
   useEffect(() => {
     admin("/health").then(
@@ -48,6 +64,7 @@ export function App() {
       () => setOk(false),
     );
   }, []);
+  if (!hash) return <Landing />;
   if (ok === null) return null;
   if (!ok) return <Login onDone={() => setOk(true)} />;
   return <Shell />;
@@ -100,9 +117,9 @@ function Shell() {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-gray-100 bg-gray-0 p-4">
-        <div className="px-2 py-2">
+        <button onClick={() => (location.hash = "")} className="rounded-xl px-2 py-2 text-left hover:bg-gray-50" title="SurgePass home">
           <Logo />
-        </div>
+        </button>
         <div className="mt-1 px-2 font-mono text-2xs text-gray-500">{new URL(GATEWAY).host}</div>
         <nav className="mt-6 flex flex-col gap-1">
           {NAV.map((n) => (
