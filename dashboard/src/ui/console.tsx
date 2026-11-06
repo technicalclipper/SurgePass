@@ -99,7 +99,29 @@ const DOT: Record<LiveEvent["kind"], string> = {
 };
 const LABEL: Record<LiveEvent["kind"], string> = { bot: "BOT", agent: "AGENT", human: "HUMAN", surge: "SURGE", draw: "DRAW", pass: "PASS", system: "SYS", forward: "FWD" };
 
-export function LogStream({ events, max = 60, dense = false }: { events: LiveEvent[]; max?: number; dense?: boolean }) {
+/** One-line summary of how the gate handled a request: the steps that decided it, ✓ / ✗, and the gate's time. */
+export function TraceLine({ e }: { e: LiveEvent }) {
+  if (!e.trace?.length) return null;
+  const shown = e.trace.filter((s) => s.step !== "request" && s.step !== "upstream");
+  return (
+    <div className="col-span-4 -mt-0.5 mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[152px] font-sans text-2xs text-gray-500">
+      {shown.map((s, i) => (
+        <span key={i} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-gray-300">→</span>}
+          <span className={s.ok === false ? "text-error-600" : s.ok === true ? "text-success-700" : "text-gray-700"}>
+            {s.ok === false ? "✗ " : s.ok === true ? "✓ " : ""}
+            {s.step === "decision" ? <b className="text-gray-900">{short(s.detail)}</b> : short(s.detail)}
+          </span>
+        </span>
+      ))}
+      {e.us !== undefined && <span className="ml-1 rounded bg-gray-100 px-1 font-mono text-gray-700">{e.us < 1000 ? `${e.us} µs` : `${(e.us / 1000).toFixed(1)} ms`}</span>}
+    </div>
+  );
+}
+
+const short = (d: string) => (d.length > 70 ? d.slice(0, 68) + "…" : d);
+
+export function LogStream({ events, max = 60, dense = false, traces = false }: { events: LiveEvent[]; max?: number; dense?: boolean; traces?: boolean }) {
   const rows = events.slice(-max).reverse();
   return (
     <div className="flex flex-col font-mono text-xs">
@@ -107,7 +129,7 @@ export function LogStream({ events, max = 60, dense = false }: { events: LiveEve
       {rows.map((e, i) => {
         const tx = hashscanTx(e.txId);
         return (
-          <div key={`${e.ts}-${i}`} className={`grid grid-cols-[76px_64px_1fr_auto] items-center gap-3 border-b border-gray-100 ${dense ? "py-1" : "py-1.5"}`}>
+          <div key={`${e.ts}-${i}`} className={`grid grid-cols-[76px_64px_1fr_auto] items-center gap-x-3 border-b border-gray-100 ${dense ? "py-1" : "py-1.5"}`}>
             <span className="tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
             <span className="inline-flex items-center gap-1.5 font-semibold text-gray-700">
               <span className={`size-2 rounded-full ${DOT[e.kind]}`} />
@@ -127,6 +149,7 @@ export function LogStream({ events, max = 60, dense = false }: { events: LiveEve
                 </a>
               )}
             </span>
+            {traces && <TraceLine e={e} />}
           </div>
         );
       })}

@@ -72,7 +72,7 @@ export function Demo() {
         </div>
         <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
-          <LogStream events={live.events.filter((e) => e.side !== "direct")} max={12} dense />
+          <LogStream events={live.events.filter((e) => e.side !== "direct" && e.trace)} max={6} dense traces />
         </div>
         <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Hedera</div>

@@ -52,6 +52,17 @@ export function isPeak(drop: Drop, now = Date.now()): boolean {
   return tripped !== undefined && now - tripped < LOAD_HOLD_MS;
 }
 
+/** Why a drop's peak is on or off, for the decision trace. */
+export function peakReason(drop: Drop, now = Date.now()): string {
+  if (drop.peak.mode === "on") return "on · switched on by the provider";
+  if (drop.peak.mode === "off") return "off · switched off by the provider";
+  const w = drop.peak.schedule.find((x) => now >= x.start && now <= x.end);
+  if (w) return `on · scheduled peak until ${new Date(w.end).toLocaleTimeString("en-IN", { hour12: false, timeZone: "Asia/Kolkata" })} IST`;
+  const tripped = loadTrippedAt.get(drop.id);
+  if (tripped !== undefined && now - tripped < LOAD_HOLD_MS) return "on · backend load crossed its trigger";
+  return "off · outside the peak window";
+}
+
 function evaluate() {
   const now = Date.now();
   const h = health.upstream;

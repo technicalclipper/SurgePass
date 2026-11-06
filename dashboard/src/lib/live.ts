@@ -46,6 +46,14 @@ export interface LiveEvent {
   txId?: string;
   hcsSeq?: number;
   side?: "direct";
+  trace?: TraceStep[];
+  us?: number;
+}
+
+export interface TraceStep {
+  step: "request" | "match" | "peak" | "identity" | "pass" | "quota" | "payment" | "budget" | "decision" | "upstream";
+  detail: string;
+  ok?: boolean;
 }
 
 const state = { stats: [] as Stats[], events: [] as LiveEvent[], connected: false, other: [] as any[], flood: null as FloodState | null, version: 0 };

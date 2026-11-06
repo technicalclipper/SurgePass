@@ -182,4 +182,15 @@ export interface LiveEvent {
   hcsSeq?: number;
   /** "direct": a response from the site that is NOT behind SurgePass (demo baseline). */
   side?: "direct";
+  /** How the gate handled the request, step by step. */
+  trace?: TraceStep[];
+  /** Time the gate itself spent deciding, in microseconds (excludes the provider's response time). */
+  us?: number;
+}
+
+export interface TraceStep {
+  step: "request" | "match" | "peak" | "identity" | "pass" | "quota" | "payment" | "budget" | "decision" | "upstream";
+  detail: string;
+  /** true = check passed, false = check failed, undefined = informational. */
+  ok?: boolean;
 }

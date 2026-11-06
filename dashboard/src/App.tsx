@@ -6,6 +6,7 @@ import { Demo } from "./pages/Demo";
 import { Proofs, Routes, Traffic } from "./pages/Other";
 import { Overview } from "./pages/Overview";
 import { PartnersPage } from "./pages/Partners";
+import { LiveGate } from "./pages/LiveGate";
 import { Btn, inputCls } from "./ui/console";
 
 // SurgePass provider console.
@@ -17,6 +18,7 @@ const NAV = [
   { id: "premium", label: "Drops · Premium" },
   { id: "partnerdrops", label: "Drops · Partner" },
   { id: "partners", label: "Partners" },
+  { id: "gate", label: "Live gate" },
   { id: "traffic", label: "Traffic" },
   { id: "proofs", label: "Proofs" },
   { id: "demo", label: "Demo screen" },
@@ -122,6 +124,7 @@ function Shell() {
           {page === "premium" && <DropsPage key="premium" pool="premium" />}
           {page === "partnerdrops" && <DropsPage key="partner" pool="partner" />}
           {page === "partners" && <PartnersPage />}
+          {page === "gate" && <LiveGate />}
           {page === "traffic" && <Traffic />}
           {page === "proofs" && <Proofs />}
         </div>
