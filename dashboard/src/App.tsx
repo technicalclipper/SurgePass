@@ -4,6 +4,7 @@ import { useLive } from "./lib/live";
 import { Compare } from "./pages/Compare";
 import { Integrate } from "./pages/Integrate";
 import { Landing } from "./pages/Landing";
+import { Deck } from "./pages/Deck";
 import { DropsPage } from "./pages/Drops";
 import { Demo } from "./pages/Demo";
 import { Proofs, Routes, Traffic } from "./pages/Other";
@@ -64,6 +65,7 @@ export function App() {
       () => setOk(false),
     );
   }, []);
+  if (location.pathname.replace(/\/+$/, "") === "/deck") return <Deck />;
   if (!hash) return <Landing />;
   if (HOSTED) return hash === "integrate" ? <PublicPage><Integrate /></PublicPage> : <HostedNotice />;
   if (ok === null) return null;

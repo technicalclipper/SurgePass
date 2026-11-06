@@ -3,5 +3,11 @@
   "framework": null,
   "installCommand": "npm ci --workspace dashboard --include-workspace-root",
   "buildCommand": "VITE_HOSTED=1 npm run build -w dashboard",
-  "outputDirectory": "dashboard/dist"
+  "outputDirectory": "dashboard/dist",
+  "rewrites": [
+    {
+      "source": "/deck",
+      "destination": "/index.html"
+    }
+  ]
 }
