@@ -1,4 +1,4 @@
-import { IDKitRequestWidget, proofOfHuman } from "@worldcoin/idkit";
+import { IDKitRequestWidget, passport, proofOfHuman, selfieCheck } from "@worldcoin/idkit";
 import { CircularState } from "@worldcoin/mini-apps-ui-kit-react";
 import { useEffect, useState } from "react";
 import type { WorldContext } from "../lib/api";
@@ -56,7 +56,7 @@ export function WorldVerify({
       action={ctx.action}
       rp_context={ctx.rp_context}
       allow_legacy_proofs={ctx.allow_legacy_proofs}
-      preset={proofOfHuman({ signal: ctx.signal })}
+      preset={ctx.credential === "selfie_check" ? selfieCheck({ signal: ctx.signal }) : ctx.credential === "passport" ? passport({ signal: ctx.signal }) : proofOfHuman({ signal: ctx.signal })}
       environment={ctx.environment as "production" | "staging"}
       handleVerify={async (result) => {
         await verify(result);

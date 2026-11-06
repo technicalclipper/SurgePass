@@ -16,10 +16,14 @@ export interface RpContextOut {
   signal?: string;
   environment: string;
   allow_legacy_proofs: boolean;
+  /** Which World ID credential to ask for: proof_of_human (Orb), selfie_check (anyone with World App), passport. */
+  credential: WorldCredential;
   dev: boolean;
 }
 
+export type WorldCredential = "proof_of_human" | "selfie_check" | "passport";
 const ALLOW_LEGACY = process.env.WORLD_ALLOW_LEGACY === "true";
+const CREDENTIAL = (["proof_of_human", "selfie_check", "passport"].includes(process.env.WORLD_CREDENTIAL ?? "") ? process.env.WORLD_CREDENTIAL : "proof_of_human") as WorldCredential;
 
 /** Issues the signed context the IDKit widget needs. The nonce is remembered so only proofs we asked for are accepted. */
 export async function issueRpContext(action: string, signal?: string): Promise<RpContextOut> {
@@ -34,6 +38,7 @@ export async function issueRpContext(action: string, signal?: string): Promise<R
       signal,
       environment: "dev",
       allow_legacy_proofs: false,
+      credential: CREDENTIAL,
       dev: true,
     };
   }
@@ -45,7 +50,8 @@ export async function issueRpContext(action: string, signal?: string): Promise<R
     action,
     signal,
     environment: config.world.environment,
-    allow_legacy_proofs: ALLOW_LEGACY,
+    allow_legacy_proofs: ALLOW_LEGACY && CREDENTIAL !== "selfie_check",
+    credential: CREDENTIAL,
     dev: false,
   };
 }

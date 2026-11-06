@@ -70,6 +70,7 @@ export interface WorldContext {
   signal?: string;
   environment: string;
   allow_legacy_proofs: boolean;
+  credential: "proof_of_human" | "selfie_check" | "passport";
   dev: boolean;
 }
 
