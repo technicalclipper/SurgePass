@@ -10,6 +10,7 @@
     "@hiero-ledger/sdk": "^2.90.1",
     "@hono/node-server": "^2.1.6",
     "@surgepass/shared": "*",
+    "@worldcoin/idkit-core": "^4.6.0",
     "@x402/core": "^2.30.0",
     "@x402/hedera": "^2.30.0",
     "hono": "^4.13.16",
