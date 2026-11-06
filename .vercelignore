@@ -1,0 +1,10 @@
+# Never upload secrets or local state with `vercel deploy`.
+.env
+.env.*
+!.env.example
+.surgepass
+.claude
+node_modules
+**/node_modules
+**/dist
+*.log
