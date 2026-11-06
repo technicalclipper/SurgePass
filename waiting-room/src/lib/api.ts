@@ -4,7 +4,7 @@ export interface PublicDrop {
   id: string;
   label: string;
   subtitle?: string;
-  pool: "normal" | "premium";
+  pool: "normal" | "premium" | "partner";
   status: "scheduled" | "open" | "revealing" | "drawing" | "results";
   opensAt: number;
   closesAt: number;

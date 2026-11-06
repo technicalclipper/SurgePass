@@ -7,7 +7,7 @@ import { ago, Btn, Field, inputCls, inr, Panel, Pill, Segmented } from "../ui/co
 // Drops (Normal) and Drops (Premium) are separate sections, each with its own URL gating,
 // seats and settings, because every platform marks premium differently.
 
-export function DropsPage({ pool }: { pool: "normal" | "premium" }) {
+export function DropsPage({ pool }: { pool: "normal" | "premium" | "partner" }) {
   const [drops, setDrops] = useState<Drop[]>([]);
   const [building, setBuilding] = useState(false);
   const live = useLive();
@@ -24,9 +24,13 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.01em]">{pool === "normal" ? "Drops · Normal" : "Drops · Premium"}</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em]">{pool === "normal" ? "Drops · Normal" : pool === "premium" ? "Drops · Premium" : "Drops · Partner"}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {pool === "normal" ? "Fair draw at the normal price. One entry per verified human." : "Sealed-bid pool with a floor and a ceiling. Everyone who wins pays the highest losing bid."}
+            {pool === "normal"
+              ? "Fair draw at the normal price. One entry per verified human."
+              : pool === "premium"
+                ? "Sealed-bid pool with a floor and a ceiling. Everyone who wins pays the highest losing bid."
+                : "A quota for authorised partners. Seats are HTS tokens only allowlisted accounts can hold; unused seats go back to the public."}
           </p>
         </div>
         <Btn onClick={() => setBuilding(true)}>+ New {pool} drop</Btn>
@@ -71,6 +75,7 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" }) {
                 <td className="py-3 pr-4 tabular">
                   {d.seats} <span className="text-gray-400">· max {d.maxSeatsPerEntry}</span>
                   {d.premium && <div className="text-2xs text-gray-500">{inr(d.premium.floorInr)}–{inr(d.premium.ceilingInr)} · dep {inr(d.premium.depositInr)}</div>}
+                  {d.partner && <div className="text-2xs text-gray-500">cap {d.partner.capPerPartner}/partner · dep {inr(d.partner.depositInr)}/seat · book in {Math.round(d.partner.bookWithinSec / 60)}m</div>}
                 </td>
                 <td className="py-3 pr-4 text-xs tabular text-gray-700">{d.status === "scheduled" ? `opens in ${ago(d.opensAt - Date.now())}` : d.status === "open" ? `closes in ${ago(d.closesAt - Date.now())}` : `closed ${ago(Date.now() - d.closesAt)} ago`}</td>
                 <td className="py-3 pr-4">
@@ -98,6 +103,7 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" }) {
                   ) : (
                     <span className="font-mono text-2xs text-gray-400">{d.hcsTopicId ?? "—"}</span>
                   )}
+                  {d.partner?.tokenId && <div className="font-mono text-2xs text-gray-500">seat token {d.partner.tokenId}</div>}
                 </td>
               </tr>
             ))}
@@ -130,12 +136,21 @@ const guessName = (seg: string, i: number, prev?: string) => {
   return `p${i}`;
 };
 
-function Builder({ pool, onClose, onCreated }: { pool: "normal" | "premium"; onClose: () => void; onCreated: () => void }) {
-  const [url, setUrl] = useState(pool === "premium" ? `${GATEWAY}/tatkal/book/12951/2026-11-06/3A?quota=PT&lang=en` : `${GATEWAY}/tatkal/book/12951/2026-11-06/3A?quota=TQ&lang=en`);
+function Builder({ pool, onClose, onCreated }: { pool: "normal" | "premium" | "partner"; onClose: () => void; onCreated: () => void }) {
+  const [url, setUrl] = useState(`${GATEWAY}/tatkal/book/12951/2026-11-06/3A?quota=${pool === "premium" ? "PT" : pool === "partner" ? "AG" : "TQ"}&lang=en`);
   const [segs, setSegs] = useState<Seg[]>([]);
   const [qs, setQs] = useState<Q[]>([]);
   const [exact, setExact] = useState(false);
-  const [label, setLabel] = useState(pool === "premium" ? "Train 12951 · 3A · Premium Tatkal" : "Train 12951 · 3A · Tatkal");
+  const [label, setLabel] = useState(`Train 12951 · 3A · ${pool === "premium" ? "Premium Tatkal" : pool === "partner" ? "Partner quota" : "Tatkal"}`);
+  const [cap, setCap] = useState(4);
+  const [pDeposit, setPDeposit] = useState(20);
+  const [bookWithin, setBookWithin] = useState(10);
+  const [openDelay, setOpenDelay] = useState(0);
+  const [spillTo, setSpillTo] = useState("");
+  const [publicDrops, setPublicDrops] = useState<Drop[]>([]);
+  useEffect(() => {
+    if (pool === "partner") void admin<{ drops: Drop[] }>("/drops").then((r) => setPublicDrops(r.drops.filter((d) => d.pool === "normal")));
+  }, [pool]);
   const [subtitle, setSubtitle] = useState("Mumbai Central → New Delhi · 6 Nov");
   const [seats, setSeats] = useState(pool === "premium" ? 4 : 20);
   const [maxPer, setMaxPer] = useState(pool === "premium" ? 2 : 4);
@@ -205,6 +220,7 @@ function Builder({ pool, onClose, onCreated }: { pool: "normal" | "premium"; onC
           maxSeatsPerEntry: maxPer,
           priceInr: pool === "normal" ? price : undefined,
           premium: pool === "premium" ? { floorInr: floor, ceilingInr: ceiling, depositInr: deposit, revealSec: 15 } : undefined,
+          partner: pool === "partner" ? { capPerPartner: cap, depositInr: pDeposit, bookWithinSec: bookWithin * 60, openDelaySec: openDelay * 60, spillTo: spillTo || undefined } : undefined,
           opensAt,
           closesAt,
           peak: { mode: "auto", schedule: [{ start: opensAt - 60_000, end: closesAt + 30 * 60_000 }], loadTrigger: { p95Ms: 800, errorRate: 0.05 } },
@@ -314,7 +330,32 @@ function Builder({ pool, onClose, onCreated }: { pool: "normal" | "premium"; onC
             <Field label="Window (seconds)">
               <input type="number" min={10} value={duration} onChange={(e) => setDuration(+e.target.value)} className={inputCls} />
             </Field>
-            {pool === "normal" ? (
+            {pool === "partner" ? (
+              <>
+                <Field label="Max seats per partner">
+                  <input type="number" min={1} value={cap} onChange={(e) => setCap(+e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Deposit per seat (₹)" hint="Refunded when booked; kept if not">
+                  <input type="number" min={0} value={pDeposit} onChange={(e) => setPDeposit(+e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Book within (minutes)" hint="After receiving seat tokens">
+                  <input type="number" min={1} value={bookWithin} onChange={(e) => setBookWithin(+e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Partners start after (minutes)" hint="e.g. 30 keeps the opening for the public">
+                  <input type="number" min={0} value={openDelay} onChange={(e) => setOpenDelay(+e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Unused seats go to" hint="A public draw: its seats or waitlist">
+                  <select value={spillTo} onChange={(e) => setSpillTo(e.target.value)} className={inputCls}>
+                    <option value="">— none —</option>
+                    {publicDrops.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            ) : pool === "normal" ? (
               <Field label="Price per seat (₹)">
                 <input type="number" value={price} onChange={(e) => setPrice(+e.target.value)} className={inputCls} />
               </Field>

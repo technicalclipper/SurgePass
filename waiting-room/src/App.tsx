@@ -54,6 +54,7 @@ function DropRoute({ id }: { id: string }) {
         <div className="pt-24 text-center text-lg font-semibold">Drop not found</div>
       </Screen>
     );
+  if (drop.pool === "partner") return <PartnerOnly drop={drop} />;
   return drop.pool === "premium" ? <PremiumPage key={drop.id} drop={drop} /> : <DropPage key={drop.id} drop={drop} />;
 }
 
@@ -83,6 +84,30 @@ function DropList() {
             value="→"
             onClick={() => navigate(`/_sp/room/${d.id}`)}
           />
+        ))}
+      </div>
+    </Screen>
+  );
+}
+
+function PartnerOnly({ drop }: { drop: PublicDrop }) {
+  const [publicDrops, setPublicDrops] = useState<PublicDrop[]>([]);
+  useEffect(() => {
+    void api.drops().then(setPublicDrops);
+  }, []);
+  return (
+    <Screen>
+      <Header onBack={() => navigate("/_sp/room/")} right={<Mark />} />
+      <div className="pt-6">
+        <Chip tone="purple">Authorised partners</Chip>
+        <h1 className="mt-4 text-3xl font-semibold leading-narrow tracking-[-0.01em]">{drop.label}</h1>
+        <div className="mt-2 text-base text-gray-500">
+          This quota is booked through authorised travel partners. Any seats they don't use go back to the public draw.
+        </div>
+      </div>
+      <div className="mt-8 flex flex-col gap-3">
+        {publicDrops.map((d) => (
+          <Row key={d.id} label={d.label} sub="Open to everyone · fair draw" value="Enter →" onClick={() => navigate(`/_sp/room/${d.id}`)} />
         ))}
       </div>
     </Screen>

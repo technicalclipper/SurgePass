@@ -35,7 +35,7 @@ export interface Drop {
   id: string;
   label: string;
   subtitle?: string;
-  pool: "normal" | "premium";
+  pool: "normal" | "premium" | "partner";
   host?: string;
   pattern: string;
   values: Record<string, string>;
@@ -55,6 +55,7 @@ export interface Drop {
   peak: { mode: "auto" | "on" | "off"; schedule: { start: number; end: number }[]; loadTrigger?: { p95Ms: number; errorRate: number } };
   readPricing: { freePerWindow: number; windowSec: number; minInr: number; maxInr: number };
   premium?: { floorInr: number; ceilingInr: number; depositInr: number; revealSec: number };
+  partner?: { capPerPartner: number; depositInr: number; bookWithinSec: number; openDelaySec: number; spillTo?: string; tokenId?: string };
   hcsTopicId?: string;
   status: "scheduled" | "open" | "revealing" | "drawing" | "results";
   peakOn: boolean;
