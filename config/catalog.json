@@ -1,0 +1,56 @@
+{
+  "trains": [
+    {
+      "trainNo": "12007",
+      "name": "Deccan Chair Car Express",
+      "from": "Mumbai CSMT",
+      "to": "Pune Jn",
+      "date": "2026-11-06",
+      "class": "CC",
+      "departs": "06:40",
+      "fareInr": 1000,
+      "seats": { "TQ": 60, "PT": 12, "GN": 200 }
+    },
+    {
+      "trainNo": "12951",
+      "name": "Western Rajdhani",
+      "from": "Mumbai Central",
+      "to": "New Delhi",
+      "date": "2026-11-06",
+      "class": "3A",
+      "departs": "17:00",
+      "fareInr": 2800,
+      "seats": { "TQ": 40, "PT": 10, "GN": 300 }
+    }
+  ],
+  "movies": [
+    {
+      "movieId": "a",
+      "title": "Monsoon Heist",
+      "showId": "juhu-9am",
+      "theatre": "Juhu Screens · Audi 2",
+      "time": "09:00",
+      "priceInr": 350,
+      "seats": 400
+    },
+    {
+      "movieId": "b",
+      "title": "Quiet Harbour",
+      "showId": "juhu-12pm",
+      "theatre": "Juhu Screens · Audi 1",
+      "time": "12:00",
+      "priceInr": 300,
+      "seats": 250
+    }
+  ],
+  "events": [
+    {
+      "eventId": "skyline-mum",
+      "title": "Skyline Live · Mumbai",
+      "venue": "Harbour Arena",
+      "date": "2026-11-08",
+      "priceInr": 4500,
+      "seats": 5000
+    }
+  ]
+}
