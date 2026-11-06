@@ -5,6 +5,7 @@ import { config } from "./config.ts";
 import { deleteDrop, drops, normalizeDrop, saveDrop } from "./drops.ts";
 import { isPeak, health } from "./mode.ts";
 import { onDropCreated } from "./hooks.ts";
+import { broadcastPublic, emit } from "./live.ts";
 
 // Provider dashboard API. Bearer ADMIN_TOKEN.
 
@@ -49,6 +50,18 @@ admin.post("/drops/:id/peak", async (c) => {
   const { mode } = (await c.req.json()) as { mode: Drop["peak"]["mode"] };
   await saveDrop({ ...cur, peak: { ...cur.peak, mode } });
   return c.json(view(drops.get(cur.id)!));
+});
+
+/** End a drop's window now: a normal drop draws immediately, premium starts revealing, a partner quota stops taking holds. */
+admin.post("/drops/:id/close", async (c) => {
+  const cur = drops.get(c.req.param("id"));
+  if (!cur) return c.json({ error: "not found" }, 404);
+  if (cur.status !== "open" && cur.status !== "scheduled") return c.json({ error: "already_closed", status: cur.status }, 409);
+  const now = Date.now();
+  await saveDrop({ ...cur, opensAt: Math.min(cur.opensAt, now - 1000), closesAt: now, status: "open" });
+  broadcastPublic({ type: "drop", drop: cur.id, status: "open", closesAt: now });
+  emit({ kind: "system", drop: cur.id, note: `${cur.label}: closed early by the provider → ${cur.pool === "normal" ? "drawing now" : cur.pool === "premium" ? "revealing bids" : "holds closed"}` });
+  return c.json({ ok: true, closesAt: now });
 });
 
 admin.delete("/drops/:id", async (c) => {

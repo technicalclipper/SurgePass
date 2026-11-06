@@ -47,12 +47,13 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" | "partner" }) 
               <th className="pb-3 font-medium">Window</th>
               <th className="pb-3 font-medium">Peak</th>
               <th className="pb-3 font-medium">Proof</th>
+              <th className="pb-3 font-medium" />
             </tr>
           </thead>
           <tbody>
             {drops.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-10 text-center text-gray-400">
+                <td colSpan={8} className="py-10 text-center text-gray-400">
                   No {pool} drops yet
                 </td>
               </tr>
@@ -104,6 +105,25 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" | "partner" }) 
                     <span className="font-mono text-2xs text-gray-400">{d.hcsTopicId ?? "—"}</span>
                   )}
                   {d.partner?.tokenId && <div className="font-mono text-2xs text-gray-500">seat token {d.partner.tokenId}</div>}
+                </td>
+                <td className="py-3 pl-2 text-right">
+                  {d.status === "open" || d.status === "scheduled" ? (
+                    <Btn
+                      kind="danger"
+                      onClick={async () => {
+                        const what = d.pool === "normal" ? "end entries and run the draw now" : d.pool === "premium" ? "close bidding now (bids reveal, then the price clears)" : "stop taking partner holds now";
+                        if (!confirm(`${d.label}: ${what}?`)) return;
+                        await admin(`/drops/${d.id}/close`, { method: "POST" });
+                        void load();
+                      }}
+                    >
+                      {d.pool === "normal" ? "Close & draw now" : d.pool === "premium" ? "Close bidding now" : "Close now"}
+                    </Btn>
+                  ) : (
+                    <a href={`${GATEWAY}/_sp/room/verify/${d.id}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-info-600">
+                      {d.status === "results" ? "Results ↗" : "Running…"}
+                    </a>
+                  )}
                 </td>
               </tr>
             ))}
