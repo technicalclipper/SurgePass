@@ -6,6 +6,7 @@ import { deleteDrop, drops, normalizeDrop, saveDrop } from "./drops.ts";
 import { isPeak, health } from "./mode.ts";
 import { onDropCreated } from "./hooks.ts";
 import { broadcastPublic, dropHistory, emit, recentOutcomes } from "./live.ts";
+import { sign } from "./keys.ts";
 import { redis } from "./redis.ts";
 
 // Provider dashboard API. Bearer ADMIN_TOKEN.
@@ -102,4 +103,36 @@ admin.post("/parse-url", async (c) => {
 
 admin.get("/health", (c) => c.json(health));
 admin.get("/outcomes", async (c) => c.json({ outcomes: await recentOutcomes() }));
+/** What a provider needs to verify X-SurgePass-Assertion: shown on the console's Integrate page. */
+const TEST_AUDIENCE = "test.surgepass";
+admin.get("/integration", (c) =>
+  c.json({
+    origin: config.origin,
+    upstream: config.upstream,
+    jwksUrl: new URL("/.well-known/jwks.json", config.origin).toString(),
+    issuer: "surgepass",
+    audience: config.audience,
+    testAudience: TEST_AUDIENCE,
+    header: "X-SurgePass-Assertion",
+    algorithm: "EdDSA (Ed25519)",
+    typ: "assertion",
+    ttlSec: 300,
+    confirmedSeatsField: "seats_booked",
+  }),
+);
+
+/** A sample assertion for testing provider code. Its audience is test.surgepass, so it can never pass a real check. */
+admin.post("/integration/test-assertion", async (c) => {
+  const { pool = "normal" } = (await c.req.json().catch(() => ({}))) as { pool?: Drop["pool"] };
+  const claims = {
+    drop: `test-${pool}`,
+    pool,
+    seats: 2,
+    requested: 2,
+    price: pool === "premium" ? 1840 : null,
+    pass_id: `test_${Math.random().toString(36).slice(2, 10)}`,
+    ...(pool === "partner" ? { partner: "0.0.11336728" } : {}),
+  };
+  return c.json({ token: await sign("assertion", claims, 300, TEST_AUDIENCE), audience: TEST_AUDIENCE, claims });
+});
 admin.get("/drops/:id/log", async (c) => c.json({ events: await dropHistory(c.req.param("id")) }));

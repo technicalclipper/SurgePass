@@ -231,7 +231,7 @@ X-SurgePass-Assertion: <jwt>
 - The header only exists on the SurgePass → provider hop, so users never see it, and any change breaks the signature.
 - The provider can verify it but can't forge it.
 
-**Provider side (optional, ~10 lines):** verify the header and cap the booking at `seats` (and charge `price` for premium).
+**Provider side (optional, ~10 lines):** verify the header and cap the booking at `seats` (and charge `price` for premium). Ready-to-paste versions for Node.js, Python, Java and Go are in [`docs/integration/`](docs/integration/), and the console's **Integrate** page shows them with your own keys URL and audience filled in, plus test headers to try them with.
 
 ```ts
 import { createRemoteJWKSet, jwtVerify } from "jose";

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { admin, GATEWAY, getToken, setToken } from "./lib/api";
 import { useLive } from "./lib/live";
 import { Compare } from "./pages/Compare";
+import { Integrate } from "./pages/Integrate";
 import { DropsPage } from "./pages/Drops";
 import { Demo } from "./pages/Demo";
 import { Proofs, Routes, Traffic } from "./pages/Other";
@@ -20,6 +21,7 @@ const NAV = [
   { id: "premium", label: "Drops · Premium" },
   { id: "partnerdrops", label: "Drops · Partner" },
   { id: "partners", label: "Partners" },
+  { id: "integrate", label: "Integrate" },
   { id: "gate", label: "Live gate" },
   { id: "traffic", label: "Traffic" },
   { id: "proofs", label: "Proofs" },
@@ -127,6 +129,7 @@ function Shell() {
           {page === "premium" && <DropsPage key="premium" pool="premium" />}
           {page === "partnerdrops" && <DropsPage key="partner" pool="partner" />}
           {page === "partners" && <PartnersPage />}
+          {page === "integrate" && <Integrate />}
           {page === "gate" && <LiveGate />}
           {page === "traffic" && <Traffic />}
           {page === "proofs" && <Proofs />}

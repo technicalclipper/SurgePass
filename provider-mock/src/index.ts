@@ -51,6 +51,12 @@ function guarded(handler: (c: Context) => Promise<Response> | Response) {
 
 const assertionOf = (c: Context) => verifyAssertion(c.req.header("x-surgepass-assertion"), GATEWAY_ORIGIN, AUDIENCE);
 
+// A header that's present but forged, expired or for another site is refused, as the Integrate guide says.
+app.use("*", async (c, next) => {
+  if (c.req.header("x-surgepass-assertion") && !(await assertionOf(c))) return c.json({ error: "invalid SurgePass assertion" }, 403);
+  return next();
+});
+
 app.get("/", guarded((c) => c.html(homePage(catalog))));
 
 // ── Trains ─────────────────────────────────────────────────────────────────
