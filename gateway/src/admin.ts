@@ -6,6 +6,7 @@ import { deleteDrop, drops, normalizeDrop, saveDrop } from "./drops.ts";
 import { isPeak, health } from "./mode.ts";
 import { onDropCreated } from "./hooks.ts";
 import { broadcastPublic, emit } from "./live.ts";
+import { redis } from "./redis.ts";
 
 // Provider dashboard API. Bearer ADMIN_TOKEN.
 
@@ -20,7 +21,14 @@ admin.use("*", async (c, next) => {
 
 const view = (d: Drop) => ({ ...d, peakOn: isPeak(d) });
 
-admin.get("/drops", (c) => c.json({ drops: drops.all().map(view) }));
+/** Entries (normal), sealed bids (premium) or seats handed out (partner) for each drop. */
+async function participation(d: Drop): Promise<number> {
+  if (d.pool === "premium") return redis.hlen(`bids:${d.id}`);
+  if (d.pool === "partner") return d.seats - (await redis.llen(`pfree:${d.id}`));
+  return redis.scard(`entered:${d.id}`);
+}
+
+admin.get("/drops", async (c) => c.json({ drops: await Promise.all(drops.all().map(async (d) => ({ ...view(d), entries: await participation(d) }))) }));
 admin.get("/drops/:id", (c) => {
   const d = drops.get(c.req.param("id"));
   return d ? c.json(view(d)) : c.json({ error: "not found" }, 404);

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { admin, GATEWAY, hashscanTopic, type Drop } from "../lib/api";
+import { EndNow, EndNowButton } from "../ui/drawnow";
 import { useLive, useTick } from "../lib/live";
 import { ago, Btn, Field, inputCls, inr, Panel, Pill, Segmented } from "../ui/console";
 
@@ -19,6 +20,10 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" | "partner" }) 
   useEffect(() => {
     void load();
   }, [live.stats.at(-1)?.drops.map((d) => d.status + d.peakOn).join()]);
+  useEffect(() => {
+    const t = setInterval(() => void load(), 3000);
+    return () => clearInterval(t);
+  }, [pool]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,102 +41,151 @@ export function DropsPage({ pool }: { pool: "normal" | "premium" | "partner" }) 
         <Btn onClick={() => setBuilding(true)}>+ New {pool} drop</Btn>
       </div>
 
-      <Panel>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
-              <th className="pb-3 font-medium">Drop</th>
-              <th className="pb-3 font-medium">Route</th>
-              <th className="pb-3 font-medium">Status</th>
-              <th className="pb-3 font-medium">Seats</th>
-              <th className="pb-3 font-medium">Window</th>
-              <th className="pb-3 font-medium">Peak</th>
-              <th className="pb-3 font-medium">Proof</th>
-              <th className="pb-3 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {drops.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-10 text-center text-gray-400">
-                  No {pool} drops yet
-                </td>
-              </tr>
-            )}
-            {drops.map((d) => (
-              <tr key={d.id} className="border-b border-gray-50 align-middle">
-                <td className="py-3 pr-4">
-                  <a href={`${GATEWAY}/_sp/room/${d.id}`} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
-                    {d.label}
-                  </a>
-                  <div className="text-xs text-gray-500">{d.subtitle ?? d.id}</div>
-                </td>
-                <td className="py-3 pr-4">
-                  <code className="rounded-md bg-gray-50 px-1.5 py-0.5 font-mono text-xs">{fill(d.pattern, d.values)}</code>
-                  <div className="mt-1 font-mono text-2xs text-gray-500">{d.conditions.map((c) => `${c.location}.${c.key} ${c.operator} ${c.value ?? ""}`).join(" · ") || "no conditions"}</div>
-                </td>
-                <td className="py-3 pr-4">
-                  <Pill kind={d.status}>{d.status}</Pill>
-                </td>
-                <td className="py-3 pr-4 tabular">
-                  {d.seats} <span className="text-gray-400">· max {d.maxSeatsPerEntry}</span>
-                  {d.premium && <div className="text-2xs text-gray-500">{inr(d.premium.floorInr)}–{inr(d.premium.ceilingInr)} · dep {inr(d.premium.depositInr)}</div>}
-                  {d.partner && <div className="text-2xs text-gray-500">cap {d.partner.capPerPartner}/partner · dep {inr(d.partner.depositInr)}/seat · book in {Math.round(d.partner.bookWithinSec / 60)}m</div>}
-                </td>
-                <td className="py-3 pr-4 text-xs tabular text-gray-700">{d.status === "scheduled" ? `opens in ${ago(d.opensAt - Date.now())}` : d.status === "open" ? `closes in ${ago(d.closesAt - Date.now())}` : `closed ${ago(Date.now() - d.closesAt)} ago`}</td>
-                <td className="py-3 pr-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${d.peakOn ? "bg-warning-600" : "bg-gray-300"}`} />
-                    <Segmented
-                      value={d.peak.mode}
-                      options={[
-                        { value: "auto", label: "Auto" },
-                        { value: "on", label: "On" },
-                        { value: "off", label: "Off" },
-                      ]}
-                      onChange={async (mode) => {
-                        await admin(`/drops/${d.id}/peak`, { method: "POST", body: JSON.stringify({ mode }) });
-                        void load();
-                      }}
-                    />
-                  </div>
-                </td>
-                <td className="py-3">
-                  {hashscanTopic(d.hcsTopicId) ? (
-                    <a href={hashscanTopic(d.hcsTopicId)} target="_blank" rel="noreferrer" className="text-xs font-semibold text-info-600">
-                      {d.hcsTopicId} ↗
-                    </a>
-                  ) : (
-                    <span className="font-mono text-2xs text-gray-400">{d.hcsTopicId ?? "—"}</span>
-                  )}
-                  {d.partner?.tokenId && <div className="font-mono text-2xs text-gray-500">seat token {d.partner.tokenId}</div>}
-                </td>
-                <td className="py-3 pl-2 text-right">
-                  {d.status === "open" || d.status === "scheduled" ? (
-                    <Btn
-                      kind="danger"
-                      onClick={async () => {
-                        const what = d.pool === "normal" ? "end entries and run the draw now" : d.pool === "premium" ? "close bidding now (bids reveal, then the price clears)" : "stop taking partner holds now";
-                        if (!confirm(`${d.label}: ${what}?`)) return;
-                        await admin(`/drops/${d.id}/close`, { method: "POST" });
-                        void load();
-                      }}
-                    >
-                      {d.pool === "normal" ? "Close & draw now" : d.pool === "premium" ? "Close bidding now" : "Close now"}
-                    </Btn>
-                  ) : (
-                    <a href={`${GATEWAY}/_sp/room/verify/${d.id}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-info-600">
-                      {d.status === "results" ? "Results ↗" : "Running…"}
-                    </a>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      {drops.length === 0 && (
+        <Panel>
+          <div className="py-10 text-center text-sm text-gray-400">No {pool} drops yet</div>
+        </Panel>
+      )}
+      <div className="flex flex-col gap-4">
+        {drops.map((d) => (
+          <DropCard key={d.id} d={d} onChange={() => void load()} />
+        ))}
+      </div>
 
       <AnimatePresence>{building && <Builder pool={pool} onClose={() => setBuilding(false)} onCreated={() => void load()} />}</AnimatePresence>
+    </div>
+  );
+}
+
+function DropCard({ d, onChange }: { d: Drop; onChange: () => void }) {
+  useTick(1000);
+  const entries = d.entries ?? null;
+  const [ending, setEnding] = useState(false);
+  const now = Date.now();
+  const left = (d.status === "scheduled" ? d.opensAt : d.closesAt) - now;
+  const clock = (ms: number) => {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return h ? `${h}:${m}:${ss}` : `${m}:${ss}`;
+  };
+  const topic = hashscanTopic(d.hcsTopicId);
+
+  return (
+    <div className="grid overflow-hidden rounded-2xl bg-gray-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:grid-cols-[1fr_280px]">
+      <div className="p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill kind={d.status}>{d.status}</Pill>
+          {d.peakOn ? <Pill kind="peak">● peak on</Pill> : <Pill kind="passthrough">passthrough</Pill>}
+          <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
+            Peak
+            <Segmented
+              value={d.peak.mode}
+              options={[
+                { value: "auto", label: "Auto" },
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+              onChange={async (mode) => {
+                await admin(`/drops/${d.id}/peak`, { method: "POST", body: JSON.stringify({ mode }) });
+                onChange();
+              }}
+            />
+          </span>
+        </div>
+        <a href={`${GATEWAY}/_sp/room/${d.id}`} target="_blank" rel="noreferrer" className="mt-3 block text-xl font-semibold tracking-[-0.01em] hover:underline">
+          {d.label}
+        </a>
+        {d.subtitle && <div className="text-sm text-gray-500">{d.subtitle}</div>}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <code className="rounded-lg bg-gray-50 px-2 py-1 font-mono text-xs">{fill(d.pattern, d.values)}</code>
+          {d.conditions.map((c, i) => (
+            <code key={i} className="rounded-lg bg-gray-50 px-2 py-1 font-mono text-xs text-gray-700">
+              {c.location}.{c.key} {c.operator} {Array.isArray(c.value) ? c.value.join("|") : c.value}
+            </code>
+          ))}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+          <Stat label="Seats" value={`${d.seats}`} sub={`max ${d.maxSeatsPerEntry} per ${d.pool === "partner" ? "hold" : "entry"}`} />
+          {d.pool === "premium" && d.premium ? (
+            <Stat label="Price range" value={`${inr(d.premium.floorInr)}–${inr(d.premium.ceilingInr)}`} sub={`deposit ${inr(d.premium.depositInr)}`} />
+          ) : d.pool === "partner" && d.partner ? (
+            <Stat label="Partner rules" value={`cap ${d.partner.capPerPartner}`} sub={`${inr(d.partner.depositInr)}/seat deposit · book in ${Math.round(d.partner.bookWithinSec / 60)}m`} />
+          ) : (
+            <Stat label="Price" value={d.priceInr ? inr(d.priceInr) : "—"} sub="per seat, on the provider's site" />
+          )}
+          <Stat
+            label="Hedera topic"
+            value={
+              topic ? (
+                <a href={topic} target="_blank" rel="noreferrer" className="text-info-600">
+                  {d.hcsTopicId} ↗
+                </a>
+              ) : (
+                (d.hcsTopicId ?? "—")
+              )
+            }
+            sub="entries, cutoff, seed, result"
+          />
+          {d.partner?.tokenId && <Stat label="Seat token" value={d.partner.tokenId} sub="HTS · KYC, freeze, wipe" />}
+        </div>
+      </div>
+
+      <div className="flex flex-col justify-between gap-4 border-t border-gray-100 bg-gray-50/60 p-5 md:border-l md:border-t-0">
+        {d.status === "open" || d.status === "scheduled" ? (
+          <>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">{d.status === "scheduled" ? "Opens in" : "Closes in"}</div>
+              <div className="mt-1 text-4xl font-semibold tabular tracking-[-0.02em]">{clock(left)}</div>
+              <div className="mt-1 text-sm text-gray-500">
+                {entries ?? "…"} {d.pool === "premium" ? "sealed bid" : d.pool === "partner" ? "hold" : "entr"}
+                {d.pool === "normal" ? (entries === 1 ? "y" : "ies") : entries === 1 ? "" : "s"} · {d.seats} seats
+              </div>
+            </div>
+            <EndNowButton pool={d.pool} onClick={() => setEnding(true)} />
+          </>
+        ) : d.status === "results" ? (
+          <>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-success-700">{d.pool === "partner" ? "Closed" : "Draw complete"}</div>
+              <div className="mt-1 text-2xl font-semibold">{entries ?? "…"} {d.pool === "premium" ? "bids" : d.pool === "partner" ? "holds" : "entries"}</div>
+              <div className="mt-1 text-sm text-gray-500">closed {ago(Date.now() - d.closesAt)} ago</div>
+            </div>
+            {d.pool !== "partner" && (
+              <a href={`${GATEWAY}/_sp/room/verify/${d.id}`} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full border border-gray-200 bg-gray-0 px-5 text-sm font-semibold hover:bg-gray-50">
+                Check the result ↗
+              </a>
+            )}
+          </>
+        ) : (
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-info-700">{d.status === "revealing" ? "Revealing bids" : "Drawing"}</div>
+            <div className="mt-2 flex items-center gap-2 text-sm font-medium">
+              <span className="size-4 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
+              Writing to Hedera…
+            </div>
+          </div>
+        )}
+      </div>
+      <EndNow
+        open={ending}
+        drop={d}
+        onClose={() => {
+          setEnding(false);
+          onChange();
+        }}
+      />
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="truncate font-semibold tabular">{value}</div>
+      {sub && <div className="truncate text-2xs text-gray-500">{sub}</div>}
     </div>
   );
 }

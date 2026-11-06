@@ -60,6 +60,8 @@ export interface Drop {
   status: "scheduled" | "open" | "revealing" | "drawing" | "results";
   peakOn: boolean;
   createdAt: number;
+  /** Entries (normal), sealed bids (premium) or seats handed out (partner). */
+  entries?: number;
 }
 
 export const hashscanTopic = (id?: string) => (id && !id.startsWith("local-") ? `https://hashscan.io/testnet/topic/${id}` : undefined);
