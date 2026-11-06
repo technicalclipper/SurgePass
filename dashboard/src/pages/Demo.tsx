@@ -125,10 +125,11 @@ function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: str
       </div>
       <div className="mt-auto pt-3">
         <LineChart
-          series={[{ name: protectedSide ? "p95 · behind SurgePass" : "p95 · direct", color: protectedSide ? "var(--series-1)" : "var(--series-2)", values: stats.map((s) => pick(s).p95Ms) }]}
+          series={[{ name: protectedSide ? "Errors · behind SurgePass" : "Errors · direct", color: protectedSide ? "var(--series-1)" : "var(--series-2)", values: stats.map((s) => Math.round(pick(s).errorRate * 100)) }]}
           times={times}
           height={150}
-          max={Math.max(1000, ...stats.map((s) => Math.max(s.backends.direct.p95Ms, s.backends.upstream.p95Ms)))}
+          max={100}
+          format={(v) => `${Math.round(v)}%`}
         />
       </div>
     </div>
