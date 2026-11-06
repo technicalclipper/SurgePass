@@ -33,6 +33,8 @@ The gateway keeps no state of its own beyond in-memory caches: drops, sessions' 
 | `agents.ts`, `spend.ts` | Agent link, 401 HumanApproval device-code flow, approvals, tokens, budgets, spend audit |
 | `premium.ts` | Sealed bids (commit–reveal), deposits, reveal window, uniform-price clearing, refunds |
 | `fcfs.ts` | Fair first come for released seats, ordered by HCS consensus timestamp |
+| `partners.ts` | Partner lane: allowlist (Hedera keys), signed requests, join (KYC), paid lookups, deposit holds, consensus-ordered allocation, booking, reclaim, freeze |
+| `hts.ts` | Seat tokens on HTS: create, mint, KYC grant, freeze, transfer, wipe (Redis simulation in local mode) |
 | `hedera.ts`, `hcsqueue.ts` | HCS topics/messages, PRNG, scheduled refunds, mirror-node reads; async submit queue |
 | `discovery.ts` | `fair-access.json`, `llms.txt`, OpenAPI |
 | `live.ts` | WebSocket feed: sampled decision log (admin), drop/draw updates (public), per-second stats |
@@ -79,4 +81,7 @@ Premium uses the same commit-then-seed pattern, with bids revealed against their
 | `bids:{drop}`, `refunds:{drop}` | Sealed bids, deposits, refunds |
 | `approval:{code}`, `device:{code}`, `agentlink:{acct}`, `agentspend:{acct}` | Agent approvals, links, spend |
 | `q:{drop}:{anon}`, `quote:{units}` | Read quotas, recent x402 quotes |
-| `hcs:{topic}` | HCS messages in local mode only |
+| `partner:{acct}`, `partners`, `pstats:{acct}` | Allowlisted partners and their stats |
+| `pallowed:{drop}`, `pfree:{drop}`, `pused:{drop}:{acct}` | KYC'd partners, free seat serials, seats used against each cap |
+| `phold:{id}`, `pholds:{drop}:{acct}`, `pqueue:{drop}` | Partner holds and the consensus-ordered queue |
+| `hcs:{topic}`, `hts:{token}:*` | HCS messages and HTS state in local mode only |

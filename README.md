@@ -45,6 +45,17 @@ The provider's booking flow (login, payment, ticketing) is **unchanged**.
 | 3 | **Floods pay**: availability checks are free within a per-human quota, then cost a small, load-based surge price | x402 on Hedera |
 | 4 | **Provably fair**: entries, cutoff, seed and results are public and recomputable | Hedera Consensus Service (HCS) |
 | 5 | **Winners book normally**: a one-time pass to the provider's existing booking page | Signed pass + signed header |
+| 6 | **Authorised partners back in at peak**: a partner quota whose seats only allowlisted partners can hold | HTS seat tokens (KYC, freeze, wipe), x402 deposits, scheduled refunds |
+
+Each drop is built from up to three **pools**, switched on per drop in the dashboard:
+
+| Pool | For | Payment |
+|---|---|---|
+| **Public draw** | Verified humans and their agents | On the provider's site, as today |
+| **Premium sealed bid** (optional) | People who'll pay more, with a ceiling | Clearing price on the provider's site |
+| **Partner lane** (optional) | Authorised partners: travel apps, agents, resellers | Fares off-chain as today; deposits and seat tokens on Hedera |
+
+Seats flow between pools: partner seats that go unused are added to the public draw, or to its waitlist after the draw.
 
 ---
 
@@ -257,6 +268,30 @@ A separate drop for a share of the seats, in the spirit of Premium Tatkal: **a f
 
 ---
 
+## Partner lane: authorised partners
+
+Providers sell through partners (travel apps, licensed agents, resellers, agent platforms), but at peak some partners grab seats in bulk and resell them, so providers often ban partners from the opening minutes. The partner lane lets them back in, under rules Hedera enforces.
+
+```
+Provider allowlists a partner's Hedera account (console)
+Partner ─ join ─▶ KYC grant on the drop's seat token (HTS)        only allowlisted accounts can ever hold a seat
+        ─ look ─▶ x402 fee per availability check                  look-to-book is paid for
+        ─ hold ─▶ x402 refundable deposit per seat → HCS            ordered by consensus timestamp, capped per partner
+                  ◀─ seat tokens transferred to the partner
+        ─ book ─▶ provider's normal booking site with the pass      X-SurgePass-Assertion names the partner
+                  → used tokens retired (wipe) → deposit refunded by a scheduled transaction
+Not booked in time → tokens wiped back, deposit kept, seats go to the public draw / waitlist
+Cheating partner  → frozen on every seat token in one click
+```
+
+- **Allowlist = the partner's Hedera key.** Every partner API call is signed with it (timestamped, replay-protected). On testnet the public key is read from the mirror node.
+- **Seat tokens** are an HTS NFT collection per partner drop. SurgePass, for the provider, holds the treasury and the KYC, freeze, wipe and supply keys. Sending a seat to an account without KYC fails at the network: `ACCOUNT_KYC_NOT_GRANTED_FOR_TOKEN`.
+- **Cap per partner** and an optional **start delay** (e.g. partners only after the first 30 minutes) are set per drop and logged to HCS.
+- **Fares stay off-chain**, paid the way partners pay today. Hedera carries the rules: who may hold seats, deposits, seat tokens, and the public record.
+- **The console** shows each partner's holds, seats issued, booked and reclaimed, look-to-book ratio, and deposits paid, refunded and kept, with links to the seat token and transfers.
+
+---
+
 ## Agents
 
 SurgePass welcomes agents and binds each one to a verified human. No SDK required: everything uses open standards.
@@ -363,7 +398,8 @@ No Solidity anywhere. Everything uses the Hedera SDK and native services.
 |---|---|
 | **x402 settlement** | Surge-priced reads beyond the free quota, premium deposits |
 | **HTS** | Payment token (test USDC) |
-| **HCS** | One topic per drop: entries, cutoff, seeds, results, seat releases, bid commitments |
+| **HCS** | One topic per drop: entries, cutoff, seeds, results, seat releases, bid commitments, partner holds and seat movements |
+| **HTS seat tokens** | Partner quota as an NFT collection with KYC (allowlist), freeze (cut off a partner), wipe (retire used seats, reclaim unused ones) and supply keys |
 | **Random number service** | Draw seed and tie-breaks |
 | **Scheduled transactions** | Automatic premium deposit refunds |
 | **Mirror Node** | Public read-back of HCS messages for independent verification |
@@ -379,6 +415,12 @@ window_closed   { drop, entry_count, last_seq }
 result          { drop, policy, seed, winners_hash, price? }
 pass_issued     { drop, jti_hash, seats }
 seats_released  { drop, jti_hash, count }
+partner_allowed { drop, partner, token }                     partner lane
+partner_hold    { drop, partner, seats, hold }                (ordered by consensus timestamp)
+seats_allocated { drop, partner, serials, hold }
+seats_redeemed  { drop, partner, serials }
+seats_reclaimed { drop, partner, serials, to }
+partner_frozen  { partner, frozen }
 ```
 
 ### Fair first come
@@ -413,6 +455,11 @@ SurgePass's own routes live under `/_sp/` so they never collide with the provide
 | `POST /_sp/api/drops/:id/enter` | Enter a normal drop with `{ seats }`; 401 HumanApproval without a human behind it |
 | `POST /_sp/api/drops/:id/bid/commit` · `/bid/reveal` | Premium sealed bid (agents pay the deposit via x402) |
 | `POST /_sp/api/drops/:id/claim-released` | Fair first come for released seats |
+| `GET /_sp/api/partner/drops` | Partner lane: partner drops, seats left, your cap and usage (signed partner request) |
+| `POST /_sp/api/partner/drops/:id/join` | KYC grant on the drop's seat token |
+| `GET /_sp/api/partner/drops/:id/availability` | Seats left, paid per lookup via x402 |
+| `POST /_sp/api/partner/drops/:id/hold` | Hold seats with a refundable x402 deposit; served in consensus order |
+| `GET /_sp/api/partner/drops/:id/holds` · `/holds/:hold/pass` | Hold status, seat-token serials, and the pass for booking |
 | `GET /_sp/api/drops/:id/status` | Your entry, result, seats, pass, waitlist position |
 | `GET /_sp/api/drops/:id/claim` | Winner in a browser: sets the pass cookie and redirects to the booking page |
 | `GET /_sp/api/drops/:id/pass` | Winner's agent: pass token to send as `X-SurgePass-Pass` |
@@ -489,6 +536,9 @@ npm run flood -- --rps 1500 --duration 60     # same bot flood to both sites
 k6 run -e RATE=2000 loadgen/bots.js           # the same with k6
 npm run humans -- --count 40                  # simulated verified humans (local mode)
 npm run agent -- rogue 12007                  # an agent with no human behind it: rejected
+npm run partner -- --as tripnest whoami       # partner account + public key, to allowlist in the console
+npm run partner -- --as tripnest join partner # then: look partner · hold partner 2 · wait partner · book partner Asha
+npm run partner -- --as tout join partner     # not allowlisted: refused
 ```
 
 ### Tests
@@ -526,6 +576,7 @@ Per ETHGlobal's rules: this project was built during the event with Claude Code 
 2. **Floods pay for themselves:** surge-priced x402 turns attack traffic into revenue.
 3. **Agents welcome, but bounded:** one human, one entry, a capped budget.
 4. **Provable fairness:** HCS cutoff, ordering, seed and results that anyone can recompute.
-5. **Drop-in:** DNS and a dashboard. The booking site doesn't change.
+5. **Partners back in at peak:** only allowlisted partners can hold seats, holds cost a deposit, unused seats go back to the public.
+6. **Drop-in:** DNS and a dashboard. The booking site doesn't change.
 
 > *The gate that keeps booking platforms up in the age of AI agents: every place in line is one real human, and it's provable.*
