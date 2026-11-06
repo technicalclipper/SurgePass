@@ -246,7 +246,7 @@ A separate drop for a share of the seats, in the spirit of Premium Tatkal: **a f
 
 - **Provider sets:** pool size, floor (normal price), ceiling, fixed deposit, max seats per entry.
 - **One bid per human** (World ID). For agents, the human's max bid is bound inside the World approval.
-- **The bid is the per-seat ticket price.** Only the small, identical deposit is paid on Hedera via x402; the ticket is paid on the provider's site.
+- **The bid is the per-seat ticket price.** The ticket is paid on the provider's site. Agents pay the small, identical deposit on Hedera via x402.
 - **Sealed with commit–reveal:**
   - During the window: `hash(amount ‖ secret)` goes to HCS. Nobody can see the amount.
   - After close: `amount ‖ secret` is revealed and checked against the commitment.
@@ -399,91 +399,102 @@ See [`WORLD_DEBRIEF.md`](WORLD_DEBRIEF.md) for the integration debrief.
 
 ## API
 
+SurgePass's own routes live under `/_sp/` so they never collide with the provider's paths.
+
 | Endpoint | Purpose |
 |---|---|
 | `GET /.well-known/fair-access.json` | Machine-readable rules for agents |
-| `GET /.well-known/jwks.json` | Public keys for the signed header |
+| `GET /.well-known/jwks.json` | Public key for passes and `X-SurgePass-Assertion` |
 | `GET /llms.txt` | Plain-language rules for LLM agents |
-| `GET /drops` | Active and upcoming drops |
-| `GET /waiting-room/:dropId` | Hosted human UI |
-| `POST /world/verify` | World proof → human session |
-| `POST /agent/link` | Connect an agent (World proof → agent link) |
-| `POST /drops/:id/enter` | Enter a drop (seats); 401 HumanApproval if not approved |
-| `POST /drops/:id/bid/commit` · `/bid/reveal` | Premium sealed bid |
-| `GET /approve/:code` | Approval page (opens World App) |
-| `POST /token` | Agent polls → bearer token after approval |
-| `GET /drops/:id/status` | Window state, entry count, result, pass, booking link, HCS link |
-| `GET /drops/:id/verify` | Everything needed to recompute the draw |
-| `POST /drops` | Create a drop (dashboard API) |
-| Remote MCP | `connect`, `list_drops`, `request_drop`, `check_availability`, `enter`, `status`, `book` |
+| `GET /_sp/openapi.json` | OpenAPI description |
+| `GET /_sp/api/drops` · `/_sp/api/drops/:id` | Active and upcoming drops |
+| `POST /_sp/api/world/context` | Signed World ID request context (one-time nonce) |
+| `POST /_sp/api/world/verify` | World ID proof → human session for that drop |
+| `POST /_sp/api/drops/:id/enter` | Enter a normal drop with `{ seats }`; 401 HumanApproval without a human behind it |
+| `POST /_sp/api/drops/:id/bid/commit` · `/bid/reveal` | Premium sealed bid (agents pay the deposit via x402) |
+| `POST /_sp/api/drops/:id/claim-released` | Fair first come for released seats |
+| `GET /_sp/api/drops/:id/status` | Your entry, result, seats, pass, waitlist position |
+| `GET /_sp/api/drops/:id/claim` | Winner in a browser: sets the pass cookie and redirects to the booking page |
+| `GET /_sp/api/drops/:id/pass` | Winner's agent: pass token to send as `X-SurgePass-Pass` |
+| `GET /_sp/api/drops/:id/verify` | Everything needed to recompute the draw or clearing price |
+| `POST /_sp/api/agent/link` | Connect an agent to a human with a budget (401 HumanApproval → one tap) |
+| `POST /_sp/api/approvals` | Ask the human to approve one or more drops in one go |
+| `POST /_sp/api/token` | Device-code exchange → bearer tokens |
+| `/_sp/room/...` | Waiting room, agent approval page (`/_sp/room/approve/:code`), recompute page (`/_sp/room/verify/:id`) |
+| `/_sp/admin/...` | Provider console API (bearer admin token) |
+| `ws /_sp/live` | Live feed for the waiting room and console |
+| Remote MCP (`:8090/mcp`) | `connect`, `list_drops`, `request_drop`, `check_availability`, `enter`, `status`, `book` |
 
 ---
 
 ## Repository layout
 
 ```
-/gateway        router, mode controller, identity, quota, pricing, x402, allocation, HCS, passes, agent APIs
-/waiting-room   human UI
-/dashboard      provider console: URL gating, drops, analytics, proof links
-/agent          remote MCP server + reference agent
-/provider-mock  a normal booking site with deliberately limited capacity
-/loadgen        bot flood + human simulators (k6)
-/config         sample drops (train, movie, concert)
+/packages/shared  drop types, URL matching, Fisher–Yates draw, allocation, premium clearing (Node + browser)
+/gateway          reverse proxy: matching, peak mode, World ID, entries, HCS, draw, passes, x402, agents, premium
+/waiting-room     human UI (World UI kit): drops, verify, draw reveal, sealed bids, approvals, recompute
+/dashboard        provider console: drops, rule builder, routes, traffic, proofs, demo screen
+/agent            remote MCP server + CLI reference agent (pays x402 on Hedera)
+/provider-mock    QuickBook: an ordinary booking site with a deliberately small backend
+/loadgen          k6 and Node bot floods, simulated humans
+/scripts          key generation, Hedera setup, demo drops, one-command reset
+/config           demo catalog (trains, shows, events)
 ```
 
 ## Tech stack
 
 | Part | Tech |
 |---|---|
-| Gateway | Node.js + TypeScript |
+| Gateway | Node.js + TypeScript, Hono |
 | State | Redis |
-| World | IDKit, Human-in-the-Loop |
-| Hedera | Hedera SDK (HCS, HTS, random number, scheduled transactions), `@x402/core`, `@x402/hedera` |
-| Agent | Remote MCP server, x402 client, Hedera wallet |
-| Waiting room + dashboard | React with live updates |
-| Load generator | k6 |
+| World | IDKit 4 (`@worldcoin/idkit`, `@worldcoin/idkit-core`), Developer Portal v4 verify |
+| Hedera | `@hiero-ledger/sdk` (HCS, PRNG, scheduled transactions, token association), `@x402/core`, `@x402/hedera` |
+| Agent | `@modelcontextprotocol/sdk` (Streamable HTTP), x402 Hedera client signer |
+| Waiting room + console | React 19, Vite, Tailwind, `@worldcoin/mini-apps-ui-kit-react`, Framer Motion |
+| Load | k6, undici |
 
 ---
 
 ## Getting started
 
 ### Prerequisites
-- Node.js 20+
-- Redis
-- A Hedera testnet account (portal.hedera.com) and a funded agent account
-- A World developer portal app
+- Node.js 20+ and Redis (`brew install redis && brew services start redis`)
+- Hedera testnet accounts from [portal.hedera.com](https://portal.hedera.com): an operator, a receiving account, and an agent account
+- A World app from [developer.world.org](https://developer.world.org) (`app_id`, `rp_id`, signing key)
 
-### Environment
+Without Hedera or World credentials everything still runs in **local mode**: HCS messages are kept in Redis, payments are quoted and accepted locally, and the waiting room shows a labelled World ID simulator. Add the credentials and the same flows run on testnet.
+
+### Setup
 ```bash
-# World
-WORLD_APP_ID=app_...
-WORLD_RP_ID=...
-WORLD_SIGNING_KEY=...
-
-# Hedera
-HEDERA_NETWORK=testnet
-HEDERA_OPERATOR_ID=0.0.xxxx
-HEDERA_OPERATOR_KEY=...
-SURGEPASS_PAY_TO=0.0.xxxx
-X402_FACILITATOR_URL=https://x402.org/facilitator
-PAYMENT_ASSET=0.0.xxxx
-
-# Agent
-AGENT_ACCOUNT_ID=0.0.xxxx
-AGENT_PRIVATE_KEY=...
-
-# Gateway
-REDIS_URL=redis://localhost:6379
-PASS_SIGNING_KEY=...        # Ed25519 private key for passes and the signed header
-UPSTREAM_URL=http://localhost:4000
+npm install
+cp .env.example .env          # fill in World and Hedera values
+npm run setup:keys            # Ed25519 pass/header keys + admin token
+npm run setup:hedera          # checks accounts, creates the audit topic, associates the payment token
 ```
-
-Never commit keys. Copy `.env.example` to `.env` and fill it in.
 
 ### Run
 ```bash
-npm install
-npm run dev
+npm run dev                   # providers A (4000) + B (4001), gateway (8080), waiting room, console (5174), agent MCP (8090)
+npm run seed                  # demo drops: Tatkal (TQ), Premium Tatkal (PT), a movie show
+```
+
+- Waiting room: `http://localhost:8080/_sp/room/` (or open a gated booking URL such as `/tatkal/book/12007/2026-11-06/CC?quota=TQ`)
+- Console: `http://localhost:5174` · demo screen at `#demo`
+- Agent: add `http://localhost:8090/mcp` to Claude as a remote MCP server, or use the CLI: `npm run agent -- connect 50`
+
+### Demo helpers
+```bash
+WINDOW_SEC=60 npm run reset   # clear everything and recreate drops with a 60-second window
+npm run flood -- --rps 1500 --duration 60     # same bot flood to both sites
+k6 run -e RATE=2000 loadgen/bots.js           # the same with k6
+npm run humans -- --count 40                  # simulated verified humans (local mode)
+npm run agent -- rogue 12007                  # an agent with no human behind it: rejected
+```
+
+### Tests
+```bash
+npm test                      # draw, allocation, matching, premium clearing
+npm run typecheck
 ```
 
 ---
@@ -500,6 +511,12 @@ Two identical mock booking sites receive the **same bot flood** at the same mome
 6. **Denied path:** a script with no approval is rejected, even when it pays.
 7. **The draw:** the window closes on HCS, the Hedera seed arrives, the Fisher–Yates shuffle runs live, seats are allocated (including a partial allocation), and **"Recompute it yourself"** matches the published winners.
 8. **Booking:** the winner lands on the normal booking page, capped at their seats by the signed header. Booking fewer releases the rest to the waitlist.
+
+---
+
+## Built with AI assistance
+
+Per ETHGlobal's rules: this project was built during the event with Claude Code (Anthropic) as a coding assistant. It helped write code in `gateway/`, `packages/shared/`, `provider-mock/`, `agent/`, `waiting-room/`, `dashboard/`, `loadgen/` and `scripts/`, and the documents `README.md`, `ARCHITECTURE.md`, `DESIGN.md` and `WORLD_DEBRIEF.md`. Commits it contributed to carry a `Co-Authored-By: Claude` trailer. Product decisions, design direction and testing were done by the team.
 
 ---
 
