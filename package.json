@@ -28,7 +28,8 @@
     "agent": "tsx agent/src/cli.ts",
     "build": "npm run build -w waiting-room && npm run build -w dashboard",
     "partner": "tsx agent/src/partner.ts",
-    "setup:accounts": "tsx scripts/create-accounts.ts"
+    "setup:accounts": "tsx scripts/create-accounts.ts",
+    "demo:flood": "tsx loadgen/flood.ts --rps 1500 --duration 45"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
