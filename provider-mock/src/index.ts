@@ -59,7 +59,7 @@ const findTrain = (no: string): Train | undefined => (catalog.trains as Train[])
 app.get(
   "/availability/:trainNo/:date/:class",
   guarded((c) => {
-    const t = findTrain(c.req.param("trainNo"));
+    const t = findTrain(c.req.param("trainNo")!);
     if (!t) return c.json({ error: "unknown train" }, 404);
     const quota = c.req.query("quota") ?? "TQ";
     return c.json({ trainNo: t.trainNo, date: t.date, class: t.class, quota, seats_left: inventory.get(`${t.trainNo}:${quota}`) ?? 0, fare_inr: t.fareInr });
@@ -69,7 +69,7 @@ app.get(
 app.get(
   "/tatkal/book/:trainNo/:date/:class",
   guarded(async (c) => {
-    const t = findTrain(c.req.param("trainNo"));
+    const t = findTrain(c.req.param("trainNo")!);
     if (!t) return c.html(page("Not found", "<p>Unknown train</p>"), 404);
     const quota = c.req.query("quota") ?? "TQ";
     const a = await assertionOf(c);
@@ -92,7 +92,7 @@ app.get(
 app.post(
   "/tatkal/book/:trainNo/:date/:class/confirm",
   guarded(async (c) => {
-    const t = findTrain(c.req.param("trainNo"));
+    const t = findTrain(c.req.param("trainNo")!);
     if (!t) return c.json({ error: "unknown train" }, 404);
     const quota = c.req.query("quota") ?? "TQ";
     const a = await assertionOf(c);
@@ -107,7 +107,7 @@ const findMovie = (id: string, show: string): Movie | undefined => (catalog.movi
 app.get(
   "/availability/movie/:movieId/:showId",
   guarded((c) => {
-    const m = findMovie(c.req.param("movieId"), c.req.param("showId"));
+    const m = findMovie(c.req.param("movieId")!, c.req.param("showId")!);
     if (!m) return c.json({ error: "unknown show" }, 404);
     return c.json({ movieId: m.movieId, showId: m.showId, seats_left: inventory.get(`${m.movieId}:${m.showId}`) ?? 0, price_inr: m.priceInr });
   }),
@@ -116,7 +116,7 @@ app.get(
 app.get(
   "/book/:movieId/:showId",
   guarded(async (c) => {
-    const m = findMovie(c.req.param("movieId"), c.req.param("showId"));
+    const m = findMovie(c.req.param("movieId")!, c.req.param("showId")!);
     if (!m) return c.html(page("Not found", "<p>Unknown show</p>"), 404);
     const a = await assertionOf(c);
     return c.html(
@@ -137,7 +137,7 @@ app.get(
 app.post(
   "/book/:movieId/:showId/confirm",
   guarded(async (c) => {
-    const m = findMovie(c.req.param("movieId"), c.req.param("showId"));
+    const m = findMovie(c.req.param("movieId")!, c.req.param("showId")!);
     if (!m) return c.json({ error: "unknown show" }, 404);
     const a = await assertionOf(c);
     return confirm(c, `${m.movieId}:${m.showId}`, `${m.title} ${m.time}`, m.priceInr, a, 10);
@@ -145,7 +145,7 @@ app.post(
 );
 
 app.get("/booking/:pnr", (c) => {
-  const b = bookings.find((x) => x.pnr === c.req.param("pnr"));
+  const b = bookings.find((x) => x.pnr === c.req.param("pnr")!);
   return b ? c.html(successPage(b)) : c.html(page("Not found", "<p>Unknown booking</p>"), 404);
 });
 
