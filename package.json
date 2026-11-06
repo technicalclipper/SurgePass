@@ -1,0 +1,37 @@
+{
+  "name": "surgepass",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "gateway",
+    "provider-mock",
+    "agent",
+    "waiting-room",
+    "dashboard"
+  ],
+  "scripts": {
+    "setup:hedera": "tsx scripts/setup-hedera.ts",
+    "setup:keys": "tsx scripts/gen-keys.ts",
+    "dev:provider": "tsx watch provider-mock/src/index.ts",
+    "dev:gateway": "tsx watch gateway/src/index.ts",
+    "dev:agent": "tsx watch agent/src/mcp-server.ts",
+    "dev:waiting-room": "npm run dev -w waiting-room",
+    "dev:dashboard": "npm run dev -w dashboard",
+    "dev": "concurrently -n provA,provB,gateway,room,dash -c gray,gray,blue,green,magenta \"PROVIDER_PORT=4000 PROVIDER_NAME=A npm run dev:provider\" \"PROVIDER_PORT=4001 PROVIDER_NAME=B npm run dev:provider\" \"npm run dev:gateway\" \"npm run dev:waiting-room\" \"npm run dev:dashboard\"",
+    "seed": "tsx scripts/seed-drops.ts",
+    "reset": "tsx scripts/reset.ts",
+    "test": "tsx --test packages/shared/test/*.test.ts gateway/test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "^2.90.1",
+    "jose": "^6.2.15"
+  }
+}
