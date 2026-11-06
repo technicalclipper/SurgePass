@@ -112,7 +112,7 @@ export async function closeAndDraw(drop: Drop) {
   if (!seedTxId) {
     seedTxId = newSeedTxId();
     await redis.set(K.seedTx(drop.id), seedTxId);
-    closedTx = (await enqueue(topic, { t: "window_closed", drop: drop.id, entry_count: entries.length, last_seq: lastSeq, seed_tx_id: seedTxId })).txId;
+    closedTx = (await enqueue(topic, { t: "window_closed", drop: drop.id, entry_count: entries.length, last_seq: lastSeq, seed_tx_id: seedTxId, seats: (drops.get(drop.id) ?? drop).seats })).txId;
   }
   const closed = { txId: closedTx };
   broadcastPublic({ type: "draw", drop: drop.id, phase: "closed", entryCount: entries.length, lastSeq, seedTxId, closedTx: closed.txId });
@@ -121,7 +121,8 @@ export async function closeAndDraw(drop: Drop) {
   broadcastPublic({ type: "draw", drop: drop.id, phase: "seed", seed, seedTxId, seedLink });
   emit({ kind: "draw", drop: drop.id, note: `seed ${seed.slice(0, 12)}…`, txId: seedTxId });
 
-  const r = runDraw(entries, seed, drop.seats);
+  const seats = (drops.get(drop.id) ?? drop).seats;
+  const r = runDraw(entries, seed, seats);
   const result: DrawResult = {
     dropId: drop.id,
     policy: "fisher-yates",

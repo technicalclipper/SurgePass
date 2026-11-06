@@ -80,8 +80,8 @@ export function Verify({ dropId }: { dropId: string }) {
           : bundle.entries;
         await push({ label: "Entries up to the cutoff", ok: entries.length === r.entryCount, detail: `${entries.length} entries, last #${lastSeq}` });
         await push({ label: "Seed matches the published result", ok: !resultMsg || resultMsg.seed === r.seed, detail: `${r.seed.slice(0, 18)}…` });
-        const drop = await api.drop(dropId);
-        const again = runDraw(entries, r.seed, drop.seats);
+        const seats = closed?.seats ?? (await api.drop(dropId)).seats;
+        const again = runDraw(entries, r.seed, seats);
         const h = winnersHash(again.winners);
         await push({ label: "Fisher–Yates recomputed in your browser", ok: h === (resultMsg?.winners_hash ?? r.winnersHash), detail: `${again.winners.length} winners · ${h.slice(0, 16)}…` });
       }

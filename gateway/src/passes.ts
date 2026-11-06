@@ -155,8 +155,9 @@ export async function onFinalStep(drop: Drop, rec: PassRecord, res: Response): P
   await redis.multi().set(K.pass(rec.jti), JSON.stringify(used), "KEEPTTL").zrem(K.expiry, rec.jti).exec();
   emit({ kind: "pass", drop: drop.id, note: `booked ${booked} of ${rec.seats} seat(s)` });
   if (booked > rec.seats) emit({ kind: "system", drop: drop.id, note: `⚠ overbooked: ${booked} booked on a ${rec.seats}-seat pass` });
-  if (booked < rec.seats) await releaseSeats(drop, rec, rec.seats - booked);
-  for (const fn of bookedHooks) await fn(drop, rec, booked).catch(() => {});
+  // Record the booking first (partner lane retires the used seat tokens here), then release the rest.
+  for (const fn of bookedHooks) await fn(drop, used, booked).catch((e) => emit({ kind: "system", drop: drop.id, note: `booking hook failed: ${String(e).slice(0, 100)}` }));
+  if (booked < rec.seats) await releaseSeats(drop, used, rec.seats - booked);
   broadcastPublic({ type: "booked", drop: drop.id, anonId: rec.sub, booked });
   return new Response(text, { status: res.status, statusText: res.statusText, headers: res.headers });
 }

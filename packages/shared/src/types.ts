@@ -157,7 +157,7 @@ export type HcsMessage =
   | { t: "claim"; drop: string; anon_id: string; seats: number }
   | { t: "bid_commit"; drop: string; anon_id: string; commit_hash: string; seats: number }
   | { t: "bid_reveal"; drop: string; anon_id: string; amount: number; secret: string }
-  | { t: "window_closed"; drop: string; entry_count: number; last_seq: number; seed_tx_id: string }
+  | { t: "window_closed"; drop: string; entry_count: number; last_seq: number; seed_tx_id: string; seats?: number }
   | { t: "result"; drop: string; policy: string; seed: string; winners_hash: string; price?: number }
   | { t: "pass_issued"; drop: string; jti_hash: string; seats: number }
   | { t: "seats_released"; drop: string; jti_hash: string; count: number }

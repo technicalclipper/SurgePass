@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { bidCommitment, clearPremium, winnersHash, type Drop, type DrawResult } from "@surgepass/shared";
 import { drops, setStatus } from "./drops.ts";
 import { enqueue, drain } from "./hcsqueue.ts";
-import { newSeedTxId, prngSeed, scheduleRefund } from "./hedera.ts";
+import { hederaLive, newSeedTxId, prngSeed, scheduleRefund } from "./hedera.ts";
 import { who } from "./identity.ts";
 import { broadcastPublic, emit } from "./live.ts";
 import { getJson, redis, setJson } from "./redis.ts";
@@ -195,7 +195,7 @@ async function refund(d: Drop, b: Bid, why: string) {
   const at = new Date(Date.now() + 60_000);
   try {
     const s = await scheduleRefund(b.deposit.payer, inrToUnits(b.deposit.amountInr), at, `SurgePass refund ${d.id}`);
-    emit({ kind: "system", drop: d.id, note: s ? `refund ₹${b.deposit.amountInr} scheduled (${why}) · ${s.scheduleId}` : `refund ₹${b.deposit.amountInr} recorded (${why}, local)` });
+    emit({ kind: "system", drop: d.id, txId: s?.txId, note: s ? `refund ₹${b.deposit.amountInr} scheduled (${why}) · ${s.scheduleId}` : hederaLive ? `⚠ refund not scheduled: set SURGEPASS_PAY_TO_KEY` : `refund ₹${b.deposit.amountInr} recorded (${why}, local)` });
     broadcastPublic({ type: "refund", drop: d.id, anonId: b.anonId, amountInr: b.deposit.amountInr, scheduleId: s?.scheduleId, link: s?.link });
   } catch (e) {
     emit({ kind: "system", drop: d.id, note: `refund scheduling failed: ${String(e).slice(0, 80)}` });

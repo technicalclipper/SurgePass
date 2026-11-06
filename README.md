@@ -380,10 +380,26 @@ Content-Type: application/json
 - Surge pricing: e.g. ₹0.10 → ₹1 → ₹5 as backend load rises.
 - Every paid request is visible on HashScan.
 
-### Settled transactions
+### Settled transactions (Hedera testnet)
 
-| What | Transaction ID | HashScan |
+From an end-to-end run on testnet: SurgePass account `0.0.11336236`, reference agent `0.0.11336726`, partners TripNest `0.0.11336728` and Ravi Travels `0.0.11336729`.
+
+| What | Transaction / entity | HashScan |
 |---|---|---|
+| **Agent paid a surge-priced availability check by itself (x402, ₹0.10)** | `0.0.9185802@1793955572.241691814` | [view](https://hashscan.io/testnet/transaction/1793955578.055780318) |
+| Partner paid a lookup fee (x402) | `0.0.9185802@1793955175.340670217` | [view](https://hashscan.io/testnet/transaction/1793955180.571991447) |
+| Partner paid a refundable seat deposit (x402, ₹40) | `0.0.9185802@1793955534.116514961` | [view](https://hashscan.io/testnet/transaction/1793955540.669533580) |
+| Partner allowlisted on the seat token (HTS KYC grant) | `0.0.11336236@1793955523.397521431` | [view](https://hashscan.io/testnet/transaction/1793955531.675773442) |
+| Seat tokens delivered to the partner (HTS NFT transfer) | `0.0.11336236@1793955540.134634029` | [view](https://hashscan.io/testnet/transaction/1793955544.698434500) |
+| Deposit refunded automatically (scheduled transaction, executed) | schedule `0.0.11336798` | [view](https://hashscan.io/testnet/schedule/0.0.11336798) |
+| Partner seat token (KYC, freeze, wipe, supply keys) | token `0.0.11336790` | [view](https://hashscan.io/testnet/token/0.0.11336790) |
+| Draw seed from Hedera's random number service | `0.0.11336236@1793955861.432279639` | [view](https://hashscan.io/testnet/transaction/1793955870.387207651) |
+| Drop topic: entries, cutoff (committing to the seed tx), result, passes | topic `0.0.11336787` | [view](https://hashscan.io/testnet/topic/0.0.11336787) |
+| Audit topic | topic `0.0.11336732` | [view](https://hashscan.io/testnet/topic/0.0.11336732) |
+
+On the drop topic, `window_closed` (#9) names the seed transaction and reached consensus **before** that random-number transaction ran; the result (#10) uses its seed. The "Check it yourself" page rebuilds the draw from the mirror node and matches.
+
+---|---|---|
 | Agent paid surge-priced availability check | _added after the demo run_ | — |
 | Premium deposit | _added after the demo run_ | — |
 | HCS topic for the demo drop | _added after the demo run_ | — |

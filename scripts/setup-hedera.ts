@@ -1,5 +1,4 @@
 import {
-  AccountBalanceQuery,
   AccountId,
   Client,
   Hbar,
@@ -32,16 +31,17 @@ const operatorKey = parseKey(env("HEDERA_OPERATOR_KEY"));
 client.setOperator(operatorId, operatorKey);
 
 async function balance(id: string) {
-  const b = await new AccountBalanceQuery().setAccountId(id).execute(client);
-  return b.hbars.toString();
+  const r = await fetch(`${env("MIRROR_NODE_URL", "https://testnet.mirrornode.hedera.com")}/api/v1/accounts/${id}`);
+  const j = (await r.json()) as { balance?: { balance: number } };
+  return j.balance ? `${j.balance.balance / 1e8} ℏ` : "not found";
 }
 
 console.log(`Network:  ${network}`);
 console.log(`Operator: ${operatorId} (${await balance(operatorId.toString())})`);
 
-for (const name of ["SURGEPASS_PAY_TO", "AGENT_ACCOUNT_ID"]) {
-  if (isConfigured(name)) console.log(`${name.padEnd(17)} ${env(name)} (${await balance(env(name))})`);
-  else console.log(`${name.padEnd(17)} not set`);
+for (const name of ["SURGEPASS_PAY_TO", "AGENT_ACCOUNT_ID", "PARTNER_TRIPNEST_ACCOUNT_ID", "PARTNER_RAVI_ACCOUNT_ID"]) {
+  if (isConfigured(name)) console.log(`${name.padEnd(28)} ${env(name)} (${await balance(env(name))})`);
+  else console.log(`${name.padEnd(28)} not set`);
 }
 
 if (!isConfigured("HCS_TOPIC_ID")) {

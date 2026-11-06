@@ -5,7 +5,7 @@ import { sha256Hex, type Drop, type PassRecord } from "@surgepass/shared";
 import { config } from "./config.ts";
 import { drops, saveDrop } from "./drops.ts";
 import { enqueue } from "./hcsqueue.ts";
-import { scheduleRefund, topicLink } from "./hedera.ts";
+import { hederaLive, scheduleRefund, topicLink } from "./hedera.ts";
 import { registerDropCreated } from "./hooks.ts";
 import { createSeatToken, grantKyc, HtsError, mintSeats, probeUnapproved, setFrozen, tokenLink, transferSeats, wipeSeats } from "./hts.ts";
 import { addRevenue, broadcast, emit } from "./live.ts";
@@ -361,7 +361,7 @@ async function refund(d: Drop, partner: string, payer: string, amountInr: number
   await stat(partner, "refundsInr", amountInr);
   try {
     const s = await scheduleRefund(payer, inrToUnits(amountInr), new Date(Date.now() + 60_000), `SurgePass deposit ${d.id}`);
-    emit({ kind: "system", drop: d.id, note: s ? `deposit ₹${amountInr} refund scheduled (${why}) · ${s.scheduleId}` : `deposit ₹${amountInr} refunded (${why}, local)` });
+    emit({ kind: "system", drop: d.id, txId: s?.txId, note: s ? `deposit ₹${amountInr} refund scheduled (${why}) · ${s.scheduleId}` : hederaLive ? `⚠ refund not scheduled: set SURGEPASS_PAY_TO_KEY` : `deposit ₹${amountInr} refunded (${why}, local)` });
   } catch (e) {
     emit({ kind: "system", drop: d.id, note: `refund scheduling failed: ${String(e).slice(0, 80)}` });
   }

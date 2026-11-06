@@ -27,7 +27,8 @@
     "humans": "tsx loadgen/humans.ts",
     "agent": "tsx agent/src/cli.ts",
     "build": "npm run build -w waiting-room && npm run build -w dashboard",
-    "partner": "tsx agent/src/partner.ts"
+    "partner": "tsx agent/src/partner.ts",
+    "setup:accounts": "tsx scripts/create-accounts.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

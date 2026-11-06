@@ -107,7 +107,7 @@ export async function prngSeed(txIdStr: string): Promise<{ seed: string; txId: s
  * Schedules a refund from the receiving account, executing at `executeAt` (long-term scheduled
  * transaction). Needs SURGEPASS_PAY_TO_KEY. Returns the schedule id.
  */
-export async function scheduleRefund(to: string, amountUnits: bigint, executeAt: Date, memo: string): Promise<{ scheduleId: string; link?: string } | null> {
+export async function scheduleRefund(to: string, amountUnits: bigint, executeAt: Date, memo: string): Promise<{ scheduleId: string; txId: string; link?: string } | null> {
   const payToKey = process.env.SURGEPASS_PAY_TO_KEY;
   if (!client || !payToKey || !config.hedera.payTo) return null;
   const from = AccountId.fromString(config.hedera.payTo);
@@ -128,7 +128,7 @@ export async function scheduleRefund(to: string, amountUnits: bigint, executeAt:
   const resp = await schedule.execute(client);
   const receipt = await resp.getReceipt(client);
   const scheduleId = receipt.scheduleId!.toString();
-  return { scheduleId, link: hashscan(`schedule/${scheduleId}`) };
+  return { scheduleId, txId: resp.transactionId.toString(), link: hashscan(`schedule/${scheduleId}`) };
 }
 
 /** Reads a topic's messages back: from the public mirror node when live, from Redis in local mode. */
