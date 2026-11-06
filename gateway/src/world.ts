@@ -58,7 +58,7 @@ export type VerifyFailure =
   | "malformed"
   | "rejected_by_world";
 
-export type VerifyOutcome = { ok: true; anonId: string; nullifier: string } | { ok: false; reason: VerifyFailure };
+export type VerifyOutcome = { ok: true; anonId: string; nullifier: string } | { ok: false; reason: VerifyFailure; detail?: string };
 
 /** Normalizes a nullifier (decimal or hex) so "0x01" and "1" map to the same value. */
 function normalizeNullifier(n: string): string {
@@ -103,9 +103,19 @@ export async function verifyProof(result: any, expectedAction: string, expectedS
     body: JSON.stringify({ ...result, environment: config.world.environment }),
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
-  if (!res?.ok) return { ok: false, reason: "rejected_by_world" };
-  const v = (await res.json().catch(() => null)) as { success?: boolean; environment?: string } | null;
-  if (v?.success !== true || (v.environment && v.environment !== config.world.environment)) return { ok: false, reason: "rejected_by_world" };
+  if (!res) return { ok: false, reason: "rejected_by_world", detail: "could not reach the Developer Portal" };
+  const raw = await res.text();
+  let v: { success?: boolean; environment?: string; code?: string; detail?: string; error?: string; message?: string } | null = null;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    v = null;
+  }
+  if (!res.ok || v?.success !== true || (v?.environment && v.environment !== config.world.environment)) {
+    const detail = [v?.code, v?.detail ?? v?.message ?? v?.error].filter(Boolean).join(": ") || `HTTP ${res.status} ${raw.slice(0, 160)}`;
+    console.warn(`[world] Developer Portal rejected a proof: ${detail}`);
+    return { ok: false, reason: "rejected_by_world", detail };
+  }
 
   return { ok: true, nullifier: item.nullifier, anonId: anonIdFor(item.nullifier, expectedAction) };
 }

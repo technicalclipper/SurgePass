@@ -87,9 +87,9 @@ api.post("/world/verify", async (c) => {
     ];
     const failAt = at[v.reason] ?? 4;
     checks.slice(0, failAt).forEach((detail) => trace.push({ step: "world", detail, ok: true }));
-    trace.push({ step: "world", detail: WORLD_FAIL[v.reason] ?? v.reason, ok: false });
+    trace.push({ step: "world", detail: `${WORLD_FAIL[v.reason] ?? v.reason}${v.detail ? ` (${v.detail})` : ""}`, ok: false });
     trace.push({ step: "decision", detail: "401 not allowed · no session, cannot enter the draw" });
-    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 401, note: `World ID verification failed: ${WORLD_FAIL[v.reason] ?? v.reason} → not allowed`, trace });
+    emit({ kind: "human", drop: d.id, method: "POST", path: "/_sp/api/world/verify", status: 401, note: `World ID verification failed: ${WORLD_FAIL[v.reason] ?? v.reason}${v.detail ? ` (${v.detail})` : ""} → not allowed`, trace });
     return c.json({ error: "verification_failed", reason: v.reason }, 401);
   }
   const ttl = Math.max(600, Math.ceil((d.closesAt - Date.now()) / 1000) + d.passTtlSec + 3600);
