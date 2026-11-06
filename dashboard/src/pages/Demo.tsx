@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { admin, type Drop } from "../lib/api";
 import { useLive, useTick, type Backend, type Stats } from "../lib/live";
@@ -26,15 +26,6 @@ export function Demo() {
   // Hedera activity: from both buffers, so a flood can't hide it.
   const hedera = [...new Map([...live.people, ...live.events].filter((e) => e.hcsSeq || e.txId || e.kind === "draw").map((e) => [e._id ?? `${e.ts}${e.note}`, e])).values()].sort((a, b) => a.ts - b.ts);
   const price = Math.max(0, ...Object.values(last?.prices ?? {}));
-  const drawMsg = [...live.other].reverse().find((m) => m.type === "draw" && m.drop === drop?.id);
-  const [takeover, setTakeover] = useState<any>(null);
-  useEffect(() => {
-    if (drawMsg?.phase === "result") {
-      setTakeover(drawMsg);
-      const tm = setTimeout(() => setTakeover(null), 9000);
-      return () => clearTimeout(tm);
-    }
-  }, [drawMsg?.phase, drawMsg?.ts]);
 
   return (
     <div className="flex h-screen flex-col gap-4 bg-gray-50 p-5">
@@ -91,31 +82,6 @@ export function Demo() {
         <LogPanel title="Hedera" events={hedera} />
       </div>
 
-      <AnimatePresence>
-        {takeover && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center bg-gray-0/95 backdrop-blur">
-            <div className="text-center">
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">Draw · {drop?.label}</div>
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }} className="mt-4 font-mono text-4xl">
-                seed 0x{String(takeover.seed).slice(0, 24)}…
-              </motion.div>
-              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.8 }} className="mt-8 text-8xl font-semibold tracking-[-0.03em]">
-                {takeover.winners?.length ?? 0} winners
-              </motion.div>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }} className="mt-4 text-2xl text-gray-500">
-                {(takeover.order?.length ?? 0).toLocaleString("en-IN")} verified entries · Fisher–Yates · {takeover.waitlist?.length ?? 0} on the waitlist
-              </motion.div>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2 }} className="mx-auto mt-10 grid max-w-3xl grid-cols-5 gap-2">
-                {(takeover.winners ?? []).slice(0, 15).map((w: any, i: number) => (
-                  <motion.div key={w.anonId} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 2 + i * 0.08 }} className="rounded-xl bg-success-100 px-2 py-2 text-xs font-semibold text-success-700">
-                    human·{w.anonId.slice(2, 6)} · {w.seats < w.requested ? `${w.seats}/${w.requested}` : w.seats}
-                  </motion.div>
-                ))}
-              </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
