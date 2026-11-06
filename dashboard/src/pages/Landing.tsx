@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import nodeVerify from "../../../docs/integration/verify.mjs?raw";
 import { HOSTED, REPO_URL } from "../lib/api";
 import { CodeWindow } from "../ui/code";
+import { BoxIcon, BriefcaseIcon, CalendarIcon, MicIcon, TicketIcon, TrainIcon } from "../ui/icons";
+import { Rolling } from "../ui/rolling";
 
 // The console's front page: what SurgePass is, who it's for, and how it works. Public (no sign-in).
 // Colour only carries meaning, as everywhere else: green = a person, red = a bot, purple = an agent,
@@ -190,7 +192,9 @@ function GateVisual() {
             <div>
               <div className="text-sm font-semibold">Booking</div>
               <div className="mt-3 text-2xs font-medium text-gray-500">Booked by real people</div>
-              <div className="text-2xl font-semibold tabular tracking-[-0.02em] sm:text-3xl">{count.in.toLocaleString("en-IN")}</div>
+              <div className="text-2xl font-semibold tabular tracking-[-0.02em] sm:text-3xl">
+                <Rolling value={count.in} />
+              </div>
             </div>
             <div>
               <div className="flex items-center justify-between text-2xs font-medium text-gray-500">
@@ -231,8 +235,8 @@ function GateVisual() {
             ))}
           </div>
           <div className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold tabular sm:text-sm">
-            <span className="rounded-full bg-success-100 px-3 py-1 text-success-700">✓ {count.in.toLocaleString("en-IN")} let through</span>
-            <span className="rounded-full bg-error-100 px-3 py-1 text-error-700">✕ {count.out.toLocaleString("en-IN")} turned away</span>
+            <span className="rounded-full bg-success-100 px-3 py-1 text-success-700">✓ <Rolling value={count.in} /> let through</span>
+            <span className="rounded-full bg-error-100 px-3 py-1 text-error-700">✕ <Rolling value={count.out} /> turned away</span>
           </div>
         </div>
       </div>
@@ -349,21 +353,19 @@ function Lanes() {
 
 function UseCases() {
   const cases = [
-    { icon: "🚆", t: "Rail Tatkal", d: "Next-day quota opens at a fixed time. A draw over the opening window replaces the click race; partner agencies get their quota as seat tokens." },
-    { icon: "🎬", t: "First-day shows", d: "Fans of a big release all hit the same showtime. One entry per person, and seats go to people rather than resale bots." },
-    { icon: "🎤", t: "Concerts and stadiums", d: "Huge demand for a few thousand seats. Premium seats can run as a sealed-bid auction with one clearing price." },
-    { icon: "👟", t: "Limited drops", d: "Sneakers, merch, collectibles. Keep the drop moment without handing it to whoever runs the most scripts." },
-    { icon: "🗓️", t: "Appointment slots", d: "Visa, passport or clinic slots released in batches. One slot per person, and nobody can hoard and resell them." },
-    { icon: "🤝", t: "Event partners", d: "Travel agencies and resellers get a quota they can't hoard or pass on, with every hand-out recorded on Hedera." },
+    { icon: <TrainIcon />, t: "Rail Tatkal", d: "Next-day quota opens at a fixed time. A draw over the opening window replaces the click race; partner agencies get their quota as seat tokens." },
+    { icon: <TicketIcon />, t: "First-day shows", d: "Fans of a big release all hit the same showtime. One entry per person, and seats go to people rather than resale bots." },
+    { icon: <MicIcon />, t: "Concerts and stadiums", d: "Huge demand for a few thousand seats. Premium seats can run as a sealed-bid auction with one clearing price." },
+    { icon: <BoxIcon />, t: "Limited drops", d: "Sneakers, merch, collectibles. Keep the drop moment without handing it to whoever runs the most scripts." },
+    { icon: <CalendarIcon />, t: "Appointment slots", d: "Visa, passport or clinic slots released in batches. One slot per person, and nobody can hoard and resell them." },
+    { icon: <BriefcaseIcon />, t: "Event partners", d: "Travel agencies and resellers get a quota they can't hoard or pass on, with every hand-out recorded on Hedera." },
   ];
   return (
     <Section id="uses" eyebrow="Use cases" title="Anywhere demand spikes at a set time." sub="If a launch minute brings your site down or your seats end up on resale, SurgePass fits in front of it.">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cases.map((c) => (
           <div key={c.t} className="group rounded-3xl border border-gray-100 p-7 transition hover:border-gray-200 hover:shadow-card">
-            <div className="grid size-12 place-items-center rounded-2xl bg-gray-50 text-2xl" aria-hidden>
-              {c.icon}
-            </div>
+            <div className="grid size-12 place-items-center rounded-2xl bg-gray-50 text-gray-900 transition group-hover:bg-gray-900 group-hover:text-gray-0">{c.icon}</div>
             <div className="mt-6 text-xl font-semibold tracking-[-0.01em]">{c.t}</div>
             <p className="mt-2 leading-compact text-gray-500">{c.d}</p>
           </div>

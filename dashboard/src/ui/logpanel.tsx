@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import type { LiveEvent } from "../lib/live";
 import { LogStream } from "./console";
+import { PauseIcon, PlayIcon } from "./icons";
 
 // A log box that scrolls instead of cutting off, with "Expand" to read it full screen:
 // a large centered window with every recent line, traces, and Pause so a flood stops moving.
@@ -86,8 +87,16 @@ function LogModal({ title, color, events, traces, onClose }: { title: string; co
           </div>
           <div className="flex items-center gap-2">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter: 402, waiting room, World ID…" className="h-10 w-64 rounded-full border border-gray-200 px-4 text-sm outline-none focus:border-gray-400" />
-            <button onClick={() => setFrozen(frozen ? null : [...events])} className={`h-10 rounded-full px-4 text-sm font-semibold ${frozen ? "bg-warning-100 text-warning-700" : "bg-gray-900 text-gray-0"}`}>
-              {frozen ? "▶ Resume" : "❚❚ Pause"}
+            <button onClick={() => setFrozen(frozen ? null : [...events])} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${frozen ? "bg-warning-100 text-warning-700" : "bg-gray-900 text-gray-0"}`}>
+              {frozen ? (
+                <>
+                  <PlayIcon /> Resume
+                </>
+              ) : (
+                <>
+                  <PauseIcon /> Pause
+                </>
+              )}
             </button>
             <button onClick={onClose} className="grid size-10 place-items-center rounded-full bg-gray-100 text-lg text-gray-700 hover:bg-gray-200" title="Close (Esc)">
               ✕

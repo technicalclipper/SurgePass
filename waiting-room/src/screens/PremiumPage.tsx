@@ -9,6 +9,7 @@ import { navigate } from "../App";
 import { Card, Header, Mark, Num, PrimaryButton, Row, Screen, SeedReel, Spinner } from "../ui/kit";
 import { WorldVerify } from "../ui/WorldVerify";
 import { DropTitle } from "./DropPage";
+import { Rolling } from "../ui/rolling";
 
 // Premium sealed bid. Your amount never leaves this device until the reveal: only
 // sha256("amount:secret") goes to Hedera. Everyone who wins pays the same price, the highest losing bid.
@@ -128,7 +129,9 @@ export function PremiumPage({ drop: initial }: { drop: PublicDrop }) {
         <>
           <div className="mt-6 text-center">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">Bidding closes in</div>
-            <div className="mt-2 text-6xl font-semibold tabular tracking-[-0.02em]">{clock(drop.closesAt - now)}</div>
+            <div className="mt-2 text-6xl font-semibold tabular tracking-[-0.02em]">
+              <Rolling value={clock(drop.closesAt - now)} />
+            </div>
             <div className="mt-2 text-sm text-gray-500">
               {drop.seats} premium seats · <Num value={sealedCount} /> sealed bids
             </div>

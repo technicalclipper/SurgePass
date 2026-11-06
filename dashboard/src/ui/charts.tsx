@@ -58,7 +58,7 @@ export function LineChart({
   times: number[];
 }) {
   const n = Math.max(2, times.length);
-  const top = max ?? niceMax(Math.max(1, ...series.flatMap((s) => s.values)));
+  const top = max ?? niceMax(Math.max(2, ...series.flatMap((s) => s.values)));
   const x = (i: number) => PAD.l + (i / (n - 1)) * (W - PAD.l - PAD.r);
   const y = (v: number) => PAD.t + (1 - Math.min(v, top) / top) * (height - PAD.t - PAD.b);
   const h = useHover(n);
@@ -101,7 +101,7 @@ export function StackedArea({ series, height = 200, times, format = (v) => Math.
       return { s, lo, hi: [...acc] };
     });
   }, [series, n]);
-  const top = niceMax(Math.max(1, ...(stacks.at(-1)?.hi ?? [1])));
+  const top = niceMax(Math.max(2, ...(stacks.at(-1)?.hi ?? [1])));
   const x = (i: number) => PAD.l + (i / (n - 1)) * (W - PAD.l - PAD.r);
   const y = (v: number) => PAD.t + (1 - v / top) * (height - PAD.t - PAD.b);
   const h = useHover(n);

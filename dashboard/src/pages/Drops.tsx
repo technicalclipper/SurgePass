@@ -4,6 +4,7 @@ import { admin, GATEWAY, hashscanTopic, type Drop } from "../lib/api";
 import { EndNow, EndNowButton } from "../ui/drawnow";
 import { useLive, useTick } from "../lib/live";
 import { ago, Btn, Field, inputCls, inr, Panel, Pill, Segmented } from "../ui/console";
+import { Rolling } from "../ui/rolling";
 
 // Drops (Normal) and Drops (Premium) are separate sections, each with its own URL gating,
 // seats and settings, because every platform marks premium differently.
@@ -137,7 +138,9 @@ function DropCard({ d, onChange }: { d: Drop; onChange: () => void }) {
           <>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">{d.status === "scheduled" ? "Opens in" : "Closes in"}</div>
-              <div className="mt-1 text-4xl font-semibold tabular tracking-[-0.02em]">{clock(left)}</div>
+              <div className="mt-1 text-4xl font-semibold tabular tracking-[-0.02em]">
+                <Rolling value={clock(left)} />
+              </div>
               <div className="mt-1 text-sm text-gray-500">
                 {entries ?? "…"} {d.pool === "premium" ? "sealed bid" : d.pool === "partner" ? "hold" : "entr"}
                 {d.pool === "normal" ? (entries === 1 ? "y" : "ies") : entries === 1 ? "" : "s"} · {d.seats} seats
@@ -149,7 +152,7 @@ function DropCard({ d, onChange }: { d: Drop; onChange: () => void }) {
           <>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-success-700">{d.pool === "partner" ? "Closed" : "Draw complete"}</div>
-              <div className="mt-1 text-2xl font-semibold">{entries ?? "…"} {d.pool === "premium" ? "bids" : d.pool === "partner" ? "holds" : "entries"}</div>
+              <div className="mt-1 text-2xl font-semibold">{entries ?? "…"} {d.pool === "premium" ? (entries === 1 ? "bid" : "bids") : d.pool === "partner" ? (entries === 1 ? "hold" : "holds") : entries === 1 ? "entry" : "entries"}</div>
               <div className="mt-1 text-sm text-gray-500">closed {ago(Date.now() - d.closesAt)} ago</div>
             </div>
             {d.pool !== "partner" && (

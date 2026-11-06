@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { admin } from "../lib/api";
 import { useLive, useTick } from "../lib/live";
+import { PlayIcon } from "./icons";
 
 // "Launch bot flood": the same bot traffic to the site behind SurgePass and the one without it.
 
@@ -60,7 +61,7 @@ export function FloodControl({ compact = false }: { compact?: boolean }) {
           </select>
           <button
             disabled={busy}
-            className="h-9 rounded-full bg-error-600 px-4 text-sm font-semibold text-gray-0 transition active:scale-95 disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-error-600 px-4 text-sm font-semibold text-gray-0 transition active:scale-95 disabled:opacity-50"
             onClick={async () => {
               setBusy(true);
               try {
@@ -70,7 +71,7 @@ export function FloodControl({ compact = false }: { compact?: boolean }) {
               }
             }}
           >
-            ▶ Launch bot flood
+            <PlayIcon /> Launch bot flood
           </button>
           {!compact && <span className="text-xs text-gray-500">Same bots hit both sites: QuickBook B directly, QuickBook A through SurgePass.</span>}
         </>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { hashscanTx } from "../lib/api";
 import type { LiveEvent } from "../lib/live";
+import { Rolling } from "./rolling";
 
 // Console primitives: same World tokens as the waiting room, denser, for a desktop operator.
 
@@ -9,7 +10,7 @@ export function Panel({ title, right, children, className = "" }: { title?: Reac
     <section className={`rounded-2xl bg-gray-0 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${className}`}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          <h2 className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-900">{title}</h2>
           {right}
         </div>
       )}
@@ -23,7 +24,7 @@ export function Kpi({ label, value, sub, tone }: { label: string; value: ReactNo
   return (
     <div className="rounded-2xl bg-gray-0 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className={`mt-1 text-3xl font-semibold tabular tracking-[-0.01em] ${c}`}>{value}</div>
+      <div className={`mt-1 text-3xl font-semibold tabular tracking-[-0.01em] ${c}`}>{typeof value === "string" || typeof value === "number" ? <Rolling value={value} /> : value}</div>
       {sub && <div className="mt-1 text-xs text-gray-500">{sub}</div>}
     </div>
   );

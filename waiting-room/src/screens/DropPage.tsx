@@ -8,6 +8,7 @@ import { navigate } from "../App";
 import { Card, Chip, GhostButton, Header, Mark, Num, PrimaryButton, Row, Screen, Sheet, Spinner } from "../ui/kit";
 import { WorldVerify } from "../ui/WorldVerify";
 import { DrawReveal, type DrawFeed } from "./DrawReveal";
+import { Rolling } from "../ui/rolling";
 
 export function DropPage({ drop: initial }: { drop: PublicDrop }) {
   const [drop, setDrop] = useState(initial);
@@ -127,7 +128,9 @@ export function DropPage({ drop: initial }: { drop: PublicDrop }) {
 
             <div className="mt-8 text-center">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">{drop.status === "scheduled" ? "Opens in" : "Closes in"}</div>
-              <div className="mt-2 text-7xl font-semibold tabular tracking-[-0.02em]">{clock((drop.status === "scheduled" ? drop.opensAt : drop.closesAt) - now)}</div>
+              <div className="mt-2 text-7xl font-semibold tabular tracking-[-0.02em]">
+                <Rolling value={clock((drop.status === "scheduled" ? drop.opensAt : drop.closesAt) - now)} />
+              </div>
               <div className="mt-3 text-sm text-gray-500">
                 <Num value={drop.seats} /> seats · <Num value={drop.entries ?? 0} /> entered
               </div>

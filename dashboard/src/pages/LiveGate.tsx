@@ -4,6 +4,7 @@ import { hashscanTx } from "../lib/api";
 import { useLive, type LiveEvent, type TraceStep } from "../lib/live";
 import { kindChip, Panel, Segmented } from "../ui/console";
 import { FloodControl } from "../ui/flood";
+import { PauseIcon, PlayIcon } from "../ui/icons";
 
 // Every request the reverse proxy handled, step by step: what came in, which drop it matched,
 // whether peak was on, who sent it, which check decided it, and what happened.
@@ -64,8 +65,16 @@ export function LiveGate() {
               { value: "people", label: "Humans & agents" },
             ]}
           />
-          <button onClick={() => setPaused(paused ? null : [...live.events])} className={`h-10 rounded-full px-4 text-sm font-semibold ${paused ? "bg-warning-100 text-warning-700" : "bg-gray-900 text-gray-0"}`}>
-            {paused ? "▶ Resume" : "❚❚ Pause"}
+          <button onClick={() => setPaused(paused ? null : [...live.events])} className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold ${paused ? "bg-warning-100 text-warning-700" : "bg-gray-900 text-gray-0"}`}>
+            {paused ? (
+                <>
+                  <PlayIcon /> Resume
+                </>
+              ) : (
+                <>
+                  <PauseIcon /> Pause
+                </>
+              )}
           </button>
         </div>
       </div>

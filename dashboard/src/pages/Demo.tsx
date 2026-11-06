@@ -6,6 +6,7 @@ import { LineChart } from "../ui/charts";
 import { inr, LogStream } from "../ui/console";
 import { FloodControl } from "../ui/flood";
 import { LogPanel } from "../ui/logpanel";
+import { Rolling } from "../ui/rolling";
 
 // Projector view: same flood, two identical sites. Left is hit directly, right is behind SurgePass.
 
@@ -135,7 +136,9 @@ function Big({ label, value, sub, tone }: { label: string; value: string; sub?: 
   return (
     <div className="rounded-2xl bg-gray-0 px-4 py-2">
       <div className="truncate text-xs text-gray-500">{label}</div>
-      <div className={`text-2xl font-semibold tabular tracking-[-0.01em] ${tone === "warning" ? "text-warning-700" : ""}`}>{value}</div>
+      <div className={`text-2xl font-semibold tabular tracking-[-0.01em] ${tone === "warning" ? "text-warning-700" : ""}`}>
+        <Rolling value={value} />
+      </div>
       {sub && <div className="text-xs text-gray-500">{sub}</div>}
     </div>
   );
@@ -143,5 +146,8 @@ function Big({ label, value, sub, tone }: { label: string; value: string; sub?: 
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const h = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };

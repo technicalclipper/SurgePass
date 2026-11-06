@@ -3,6 +3,7 @@ import { admin, GATEWAY, hashscanTx, type Drop } from "../lib/api";
 import type { LiveEvent } from "../lib/live";
 import { ago, Segmented } from "../ui/console";
 import { LogPanel } from "../ui/logpanel";
+import { PlayIcon } from "../ui/icons";
 
 // Per drop: run agents and companies against it (left), and see who the gate let through and who it
 // turned away (right), with the drop's full log underneath. People are you, in the waiting room.
@@ -279,7 +280,7 @@ function RunPanel({ drops, selected, scenarios, jobs }: { drops: Drop[]; selecte
                   action={
                     fits ? (
                       <button disabled={busy} onClick={() => void run(id)} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-xs font-semibold text-gray-0 transition hover:bg-gray-700 active:scale-[0.98] disabled:bg-gray-200 disabled:text-gray-500">
-                        {busy ? <span className="size-3 animate-spin rounded-full border-2 border-gray-500/30 border-t-gray-500" /> : "▶"} {busy ? "Running" : "Run"}
+                        {busy ? <span className="size-3 animate-spin rounded-full border-2 border-gray-500/30 border-t-gray-500" /> : <PlayIcon width={11} height={11} />} {busy ? "Running" : "Run"}
                       </button>
                     ) : (
                       <span className="text-2xs text-gray-400">{s.pools.join(" / ")} drops</span>
