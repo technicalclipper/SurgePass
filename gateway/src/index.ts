@@ -22,10 +22,12 @@ import { setPremiumCloseHandler } from "./lottery.ts";
 import { onBooked } from "./passes.ts";
 import { fcfs } from "./fcfs.ts";
 import { partnerApi, registerPartnerAdmin, startPartnerQueue } from "./partners.ts";
+import { registerFloodAdmin } from "./floodctl.ts";
 
 const app = new Hono();
 
 registerPartnerAdmin(admin);
+registerFloodAdmin(admin);
 app.route("/_sp/admin", admin);
 app.route("/_sp/api", agents);
 app.route("/_sp/api", premium);

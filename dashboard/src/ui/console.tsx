@@ -111,7 +111,7 @@ export function LogStream({ events, max = 60, dense = false }: { events: LiveEve
             <span className="tabular text-gray-400">{new Date(e.ts).toLocaleTimeString("en-IN", { hour12: false })}</span>
             <span className="inline-flex items-center gap-1.5 font-semibold text-gray-700">
               <span className={`size-2 rounded-full ${DOT[e.kind]}`} />
-              {LABEL[e.kind]}
+              {e.side === "direct" ? "BOT→B" : LABEL[e.kind]}
             </span>
             <span className="truncate text-gray-900">
               {e.method && <span className="text-gray-500">{e.method} </span>}

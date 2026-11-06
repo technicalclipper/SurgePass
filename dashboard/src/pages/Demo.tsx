@@ -4,6 +4,7 @@ import { admin, type Drop } from "../lib/api";
 import { useLive, useTick, type Backend, type Stats } from "../lib/live";
 import { LineChart } from "../ui/charts";
 import { inr, LogStream } from "../ui/console";
+import { FloodControl } from "../ui/flood";
 
 // Projector view: same flood, two identical sites. Left is hit directly, right is behind SurgePass.
 
@@ -30,6 +31,12 @@ export function Demo() {
 
   return (
     <div className="flex h-screen flex-col gap-4 bg-gray-50 p-5">
+      <div className="flex items-center justify-between gap-4">
+        <a href="#overview" className="text-sm font-semibold text-gray-500 hover:text-gray-900">
+          ← SurgePass console
+        </a>
+        <FloodControl />
+      </div>
       <div className="grid flex-[1.1] grid-cols-2 gap-4">
         <Side title="Without SurgePass" sub="QuickBook B · hit directly" b={last?.backends.direct} stats={live.stats} pick={(s) => s.backends.direct} times={times} />
         <Side title="With SurgePass" sub="QuickBook A · behind the gate" b={last?.backends.upstream} stats={live.stats} pick={(s) => s.backends.upstream} times={times} protectedSide />
@@ -58,12 +65,14 @@ export function Demo() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[3fr_2fr] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[1fr_1fr_0.8fr] gap-4">
         <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Live log</div>
-          <div className="h-full overflow-hidden">
-            <LogStream events={live.events} max={14} dense />
-          </div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-error-700">Without SurgePass · what bots get from QuickBook B</div>
+          <LogStream events={live.events.filter((e) => e.side === "direct")} max={12} dense />
+        </div>
+        <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-success-700">With SurgePass · what the gate does</div>
+          <LogStream events={live.events.filter((e) => e.side !== "direct")} max={12} dense />
         </div>
         <div className="min-h-0 overflow-hidden rounded-2xl bg-gray-0 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Hedera</div>
@@ -119,9 +128,9 @@ function Side({ title, sub, b, stats, pick, times, protectedSide }: { title: str
         </motion.span>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-4">
-        <Metric label="p95 latency" value={`${b?.p95Ms ?? 0} ms`} bad={(b?.p95Ms ?? 0) > 800} />
         <Metric label="errors (503)" value={`${Math.round((b?.errorRate ?? 0) * 100)}%`} bad={(b?.errorRate ?? 0) > 0.05} />
-        <Metric label="load" value={`${Math.round((b?.load ?? 0) * 100)}%`} bad={(b?.load ?? 0) > 0.8} />
+        <Metric label="p95 latency" value={`${b?.p95Ms ?? 0} ms`} bad={(b?.p95Ms ?? 0) > 800} />
+        <Metric label={protectedSide ? "bookings (pass holders)" : "seats grabbed by bots"} value={String(b?.bookings ?? 0)} bad={!protectedSide && (b?.bookings ?? 0) > 0} />
       </div>
       <div className="mt-auto pt-3">
         <LineChart

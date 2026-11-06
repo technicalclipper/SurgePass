@@ -3,6 +3,7 @@ import { admin, GATEWAY, type Drop } from "../lib/api";
 import { useLive, type Stats } from "../lib/live";
 import { LineChart, Legend, StackedArea, Spark, type Series } from "../ui/charts";
 import { inr, Kpi, LogStream, Panel, Pill } from "../ui/console";
+import { FloodControl } from "../ui/flood";
 
 export const SERIES = {
   forwarded: { name: "Forwarded", color: "var(--series-1)" },
@@ -35,6 +36,7 @@ export function Overview() {
           Fronting <span className="font-mono">{new URL(GATEWAY).host}</span> · upstream health, gated drops and every decision the gate makes.
         </p>
       </div>
+      <FloodControl />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <Kpi label="Requests / s" value={(last?.perSecond.requests ?? 0).toLocaleString("en-IN")} sub={<Spark values={live.stats.map((s) => s.perSecond.requests ?? 0)} />} />

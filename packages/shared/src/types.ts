@@ -180,4 +180,6 @@ export interface LiveEvent {
   drop?: string;
   txId?: string;
   hcsSeq?: number;
+  /** "direct": a response from the site that is NOT behind SurgePass (demo baseline). */
+  side?: "direct";
 }

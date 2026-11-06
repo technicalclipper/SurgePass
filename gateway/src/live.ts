@@ -44,15 +44,17 @@ export function addRevenue(inr: number) {
 
 const clients = new Map<WebSocket, { admin: boolean }>();
 const recent: LiveEvent[] = [];
-let sentThisSecond = 0;
-const MAX_EVENTS_PER_SEC = 40;
+const sentThisSecond = { gate: 0, direct: 0 };
+const MAX_EVENTS_PER_SEC = { gate: 40, direct: 15 };
 
-/** Publishes a log line. Under a flood only a sample of bot lines is sent; important events always go out. */
+/** Publishes a log line. Under a flood only a sample of bot lines is sent (separately for the gate and
+ *  the direct demo site); important events always go out. */
 export function emit(e: Omit<LiveEvent, "ts">) {
   const ev: LiveEvent = { ts: Date.now(), ...e };
   const important = e.kind !== "bot" && e.kind !== "forward";
-  if (!important && sentThisSecond >= MAX_EVENTS_PER_SEC) return;
-  sentThisSecond++;
+  const lane = e.side === "direct" ? "direct" : "gate";
+  if (!important && sentThisSecond[lane] >= MAX_EVENTS_PER_SEC[lane]) return;
+  sentThisSecond[lane]++;
   recent.push(ev);
   if (recent.length > 300) recent.shift();
   broadcast({ type: "event", event: ev });
@@ -99,7 +101,8 @@ setInterval(async () => {
     ...(await extra()),
   };
   for (const k of Object.keys(counters) as CounterName[]) counters[k] = 0;
-  sentThisSecond = 0;
+  sentThisSecond.gate = 0;
+  sentThisSecond.direct = 0;
   broadcast(snapshot);
 }, 1000).unref();
 

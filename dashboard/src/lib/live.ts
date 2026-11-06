@@ -11,6 +11,17 @@ export interface Backend {
   load: number;
   crashed: boolean;
   reachable: boolean;
+  bookings?: number;
+}
+
+export interface FloodState {
+  running: boolean;
+  rps: number;
+  duration: number;
+  endsAt: number;
+  startedAt: number;
+  remainingSec?: number;
+  last?: { gated: Record<string, number>; direct: Record<string, number>; p95: { gated: number; direct: number } };
 }
 
 export interface Stats {
@@ -34,9 +45,10 @@ export interface LiveEvent {
   drop?: string;
   txId?: string;
   hcsSeq?: number;
+  side?: "direct";
 }
 
-const state = { stats: [] as Stats[], events: [] as LiveEvent[], connected: false, other: [] as any[], version: 0 };
+const state = { stats: [] as Stats[], events: [] as LiveEvent[], connected: false, other: [] as any[], flood: null as FloodState | null, version: 0 };
 const subs = new Set<() => void>();
 const bump = () => {
   state.version++;
@@ -64,6 +76,8 @@ function connect() {
       state.stats = [...state.stats.slice(-119), m];
     } else if (m.type === "event") {
       state.events = [...state.events.slice(-399), m.event];
+    } else if (m.type === "flood") {
+      state.flood = m;
     } else if (m.type === "hello") {
       state.events = m.recent ?? [];
     } else {

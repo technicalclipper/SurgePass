@@ -14,6 +14,8 @@ export interface BackendHealth {
   load: number;
   crashed: boolean;
   reachable: boolean;
+  /** Bookings the backend has confirmed (on the direct demo site these are bots grabbing seats). */
+  bookings?: number;
 }
 
 const unreachable = (name: string): BackendHealth => ({ name, rps: 0, p95Ms: 0, errorRate: 1, load: 1, crashed: true, reachable: false });
