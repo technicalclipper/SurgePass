@@ -92,8 +92,8 @@ export function DrawReveal({
           {stage === "closing" && "Window closed"}
           {stage === "committed" && "Draw locked"}
           {(stage === "seed" || stage === "shuffle") && <SeedReel seed={feed.seed} />}
-          {stage === "winners" && "Drawing winners"}
-          {stage === "done" && `${winners.length} winners`}
+          {stage === "winners" && "Handing out seats"}
+          {stage === "done" && `${winners.length} ${winners.length === 1 ? "person" : "people"} in`}
         </div>
         <div className="mt-2 min-h-5 text-sm text-gray-500">
           {stage === "closing" && `${(feed.entryCount ?? entries.length).toLocaleString("en-IN")} entries · writing the cutoff to Hedera`}

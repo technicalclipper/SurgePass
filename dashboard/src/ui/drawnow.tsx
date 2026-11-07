@@ -9,7 +9,7 @@ const COPY = {
   normal: {
     button: "End now & draw",
     title: "End entries and draw now?",
-    steps: ["Entries close", "Cutoff written to Hedera", "Random seed from Hedera", "Winners drawn · passes issued"],
+    steps: ["Entries close", "Cutoff written to Hedera", "Random seed from Hedera", "Seats given out · passes issued"],
     go: "Draw now",
   },
   premium: {
@@ -114,7 +114,7 @@ function EndNowModal({ drop, onClose }: { drop: Drop; onClose: () => void }) {
       >
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">{drop.label}</div>
         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.01em]">
-          {phase === "confirm" ? c.title : phase === "done" ? (drop.pool === "partner" ? "Partner quota closed" : `${winners} winner${winners === 1 ? "" : "s"} drawn`) : phase === "error" ? "Couldn't end it" : "Ending now…"}
+          {phase === "confirm" ? c.title : phase === "done" ? (drop.pool === "partner" ? "Partner quota closed" : `${winners} ${winners === 1 ? "person" : "people"} in`) : phase === "error" ? "Couldn't end it" : "Ending now…"}
         </h2>
         {phase === "confirm" && (
           <p className="mt-2 text-sm text-gray-500">

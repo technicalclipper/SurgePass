@@ -235,7 +235,7 @@ function ResultCard({ drop, status, now }: { drop: PublicDrop; status: Status | 
   let sub = status.you ? "You didn't enter this drop." : "Verify to see your result.";
   if (o?.result === "won" && pass?.status === "issued") {
     state = "success";
-    title = "You won";
+    title = "You're in";
     sub = o.partial ? `${o.seats} of ${o.requested} seats · only ${o.seats} were left in your turn` : `${o.seats} seat${(o.seats ?? 1) > 1 ? "s" : ""}${o.price ? ` · ${inr(o.price)} per seat` : ""}`;
   } else if (o?.result === "booked") {
     state = "success";

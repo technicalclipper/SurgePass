@@ -73,7 +73,7 @@ export function Verify({ dropId }: { dropId: string }) {
         const cleared = clearPremium(bids, drop.seats, drop.premium!.floorInr, drop.premium!.ceilingInr, r.seed);
         await push({ label: "Clearing price = highest losing bid", ok: cleared.clearingPriceInr === r.clearingPriceInr, detail: `₹${cleared.clearingPriceInr}` });
         const h = winnersHash(cleared.winners);
-        await push({ label: "Winners match the published result", ok: h === (resultMsg?.winners_hash ?? r.winnersHash), detail: `${h.slice(0, 16)}…` });
+        await push({ label: "The seat list matches the published result", ok: h === (resultMsg?.winners_hash ?? r.winnersHash), detail: `${h.slice(0, 16)}…` });
       } else {
         const entries = messages.length
           ? messages.filter((m) => m.message.t === "entry" && m.seq <= lastSeq).map((m) => ({ anonId: m.message.anon_id, seats: m.message.seats, seq: m.seq }))
@@ -83,7 +83,7 @@ export function Verify({ dropId }: { dropId: string }) {
         const seats = closed?.seats ?? (await api.drop(dropId)).seats;
         const again = runDraw(entries, r.seed, seats);
         const h = winnersHash(again.winners);
-        await push({ label: "Fisher–Yates recomputed in your browser", ok: h === (resultMsg?.winners_hash ?? r.winnersHash), detail: `${again.winners.length} winners · ${h.slice(0, 16)}…` });
+        await push({ label: "Fisher–Yates recomputed in your browser", ok: h === (resultMsg?.winners_hash ?? r.winnersHash), detail: `${again.winners.length} ${again.winners.length === 1 ? "person" : "people"} in · ${h.slice(0, 16)}…` });
       }
     } catch (e: any) {
       await push({ label: "Could not complete verification", ok: false, detail: e.message });

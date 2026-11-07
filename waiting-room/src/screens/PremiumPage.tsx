@@ -161,7 +161,7 @@ export function PremiumPage({ drop: initial }: { drop: PublicDrop }) {
                   className="mt-4 w-full accent-gray-900"
                   aria-label="Max bid per seat"
                 />
-                <div className="mt-3 text-xs leading-compact text-gray-500">If you win, you pay the highest losing bid, never more than this. Bid what the seat is worth to you.</div>
+                <div className="mt-3 text-xs leading-compact text-gray-500">If you get a seat, you pay the clearing price (the highest bid that didn't get one), never more than this. Bid what the seat is worth to you.</div>
               </Card>
               <div>
                 <div className="mb-3 text-sm font-medium text-gray-700">Seats</div>
@@ -314,7 +314,7 @@ function ClearingChart({
     <div className="mt-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <div className="flex justify-center">{me && myBid && <CircularState value={won ? "success" : "warning"} size="lg" />}</div>
-        <div className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">Everyone who won pays</div>
+        <div className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-gray-500">Everyone who gets a seat pays</div>
         <div className="mt-1 text-6xl font-semibold tabular tracking-[-0.02em]">{inr(result.clearingPriceInr)}</div>
         {me && myBid && (
           <div className="mt-2 text-base text-gray-500">
