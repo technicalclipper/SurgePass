@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { env, envNum, REPO_ROOT } from "@surgepass/shared/env";
 import { Capacity } from "./capacity.ts";
 import { verifyAssertion, type Assertion } from "./assertion.ts";
-import { page, bookingPage, homePage, successPage } from "./pages.ts";
+import { bookingPage, busyPage, homePage, page, successPage } from "./pages.ts";
 
 // QuickBook: an ordinary booking site with a deliberately small backend.
 // It knows nothing about SurgePass except the optional X-SurgePass-Assertion check.
@@ -45,7 +45,7 @@ function guarded(handler: (c: Context) => Promise<Response> | Response) {
   return async (c: Context) => {
     const res = await capacity.run(() => handler(c));
     if (res) return res;
-    return c.html(page("Service unavailable", `<div class="card"><h2>We're experiencing heavy traffic</h2><p>Please try again later.</p></div>`), 503);
+    return c.html(busyPage(), 503);
   };
 }
 
@@ -57,7 +57,7 @@ app.use("*", async (c, next) => {
   return next();
 });
 
-app.get("/", guarded((c) => c.html(homePage(catalog))));
+app.get("/", guarded((c) => c.html(homePage(catalog, (key) => inventory.get(key) ?? 0))));
 
 // Movie availability first: the train pattern /availability/:trainNo/:date/:class would also match it.
 app.get(
@@ -129,6 +129,7 @@ app.get(
     return c.html(
       bookingPage({
         kind: "movie",
+        art: (catalog.movies as Movie[]).indexOf(m),
         title: m.title,
         subtitle: `${m.theatre} · ${m.time}`,
         fare: m.priceInr,
